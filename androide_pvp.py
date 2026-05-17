@@ -1,0 +1,3156 @@
+import discord
+from discord.ext import commands
+from discord import app_commands
+import json
+import os
+import random
+import asyncio
+from datetime import datetime, timezone
+from flask import Flask
+import threading
+
+app = Flask('')
+@app.route('/')
+def home(): return "Bot Online"
+
+def run(): app.run(host='0.0.0.0', port=8080)
+threading.Thread(target=run).start()
+
+# ============================================================
+#  CONFIGURACION - Carga el token seguro desde Render
+# ============================================================
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+PREFIX = "!"
+
+# ============================================================
+#  BASE DE DATOS (JSON simple, sin necesidad de SQL)
+# ============================================================
+DB_FILE = "db.json"
+
+def load_db():
+    if not os.path.exists(DB_FILE):
+        return {"users": {}}
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
+
+def save_db(db):
+    with open(DB_FILE, "w") as f:
+        json.dump(db, f, indent=2)
+
+def get_user(db, user_id):
+    uid = str(user_id)
+    if uid not in db["users"]:
+        return None
+    return db["users"][uid]
+
+def create_user(db, user_id, display_name):
+    uid = str(user_id)
+    db["users"][uid] = {
+        "name": display_name,
+        "coins": 1000,
+        "figures": [],       # lista de figuras que posee (pueden repetirse)
+        "team": [None, None, None],  # equipo de 3 posiciones
+        "wins": 0,
+        "losses": 0,
+        "level": 1,
+        "xp": 0
+    }
+    save_db(db)
+    return db["users"][uid]
+
+# ============================================================
+#  FIGURAS
+#  image: URL pública de la imagen (Imgur, Discord CDN, etc.)
+# ============================================================
+FIGURES = {
+    "gamer64": {
+        "name": "Gamer64",
+        "emoji": "🤖",
+        "rarity": "raro",
+        "price": 640,
+        "hp": 142,
+        "attack": 34,
+        "defense": 38,
+        "speed": 41,
+        "image": "https://i.imgur.com/gl2UZZ3.png",  # Pon la URL pública de GamerNew.png aquí
+    },
+    "sonic": {
+        "name": "Sonic",
+        "emoji": "🦔",
+        "rarity": "épico",
+        "price": 1991,
+        "hp": 200,
+        "attack": 40,
+        "defense": 42,
+        "speed": 60,
+        "image": "https://preview.redd.it/my-first-fanart-drew-the-sonic-adventure-pose-v0-ca4ogp5vra4c1.jpg?width=1080&crop=smart&auto=webp&s=34f3148da3adadf91ecfdfc4d2c218a137a0213f",
+    },
+    "alex": {
+        "name": "Alex",
+        "emoji": "<:sketch1778366830925:1503043086564069497>",
+        "rarity": "legendario",
+        "price": 215,
+        "hp": 250,
+        "attack": 20,
+        "defense": 30,
+        "speed": 50,
+        "image": "https://i.imgur.com/iJctAhj.png",  # Pon la URL aquí
+    },
+    "ringmaster": {
+        "name": "Caine",
+        "emoji": "🦷",
+        "rarity": "legendario",
+        "price": 1998,
+        "hp": 230,
+        "attack": 35,
+        "defense": 40,
+        "speed": 30,
+        "image": "https://preview.redd.it/caine-villain-or-misunderstood-v0-covbmlxtsnqg1.png?width=860&format=png&auto=webp&s=8a3b7c21e6aa8adb851d88643994bd495064ca97",
+        "passive": "torment",   # Pasiva: WHY DO YOU PEOPLE TORMENT ME
+    },
+    "michibug": {
+        "name": "MichiBug",
+        "emoji": "🦊",
+        "rarity": "legendario",
+        "price": 900,
+        "hp": 170,
+        "attack": 22,
+        "defense": -2,
+        "speed": 8,
+        "image": "https://i.imgur.com/gPMrvOs.png",
+    },
+    "tails": {
+        "name": "Tails",
+        "emoji": "🦊",
+        "rarity": "épico",
+        "price": 1992,
+        "hp": 140,
+        "attack": 23,
+        "defense": 20,
+        "speed": 20,
+        "image": "https://static.wikia.nocookie.net/sstp/images/6/6a/Tails.png/revision/latest?cb=20130319112956",
+    },
+    "hatred": {
+        "name": "1x1x1x1",
+        "emoji": "🤬",
+        "rarity": "legendario",
+        "price": 1250,
+        "hp": 245,
+        "attack": 30,
+        "defense": 25,
+        "speed": 25,
+        "image": "https://pbs.twimg.com/media/Gxe4SOdWcAArEZN.jpg",
+    },
+    "chicken": {
+        "name": "Shedletsky",
+        "emoji": "🐔",
+        "rarity": "legendario",
+        "price": 2006,
+        "hp": 175,
+        "attack": 45,
+        "defense": 30,
+        "speed": 30,
+        "image": "https://i.namu.wiki/i/uQrQ4Z8Ff1fNhIln9_uMjuG2-ehRjdvFjBoNQso5fohpP8WclZo-YF4QpQIfjqj6Y6hhYDmTlR-xatYm2PFNOg.webp",
+    },
+    "blackout": {
+        "name": "Black Impostor",
+        "emoji": "🔪",
+        "rarity": "legendario",
+        "price": 2021,
+        "hp": 235,
+        "attack": 40,
+        "defense": 30,
+        "speed": 25,
+        "image": "https://static.wikia.nocookie.net/the-ultimate-evil/images/b/bc/Black_Impostor_FINALE_V4.png/revision/latest/scale-to-width/360?cb=20230309224128",
+    },
+    "lobster": {
+        "name": "Lobster",
+        "emoji": "🦞",
+        "rarity": "común",
+        "price": 0,        # Solo se obtiene con /lobster
+        "hp": 1,
+        "attack": 1,
+        "defense": 1,
+        "speed": 1,
+        "image": "https://images.contentstack.io/v3/assets/bltcedd8dbd5891265b/blt6f01003267cbf97f/664cbd77d94e39430f4c7cd1/lobster-guide-hero.jpg?q=70&width=3840&auto=webp",
+    },
+    "agustoloco": {
+        "name": "AgustoLoco",
+        "emoji": "🚬",
+        "rarity": "común",
+        "price": 1,
+        "hp": 30,
+        "attack": 1,
+        "defense": 0,
+        "speed": 1,
+        "image": "https://i.imgur.com/ZEPFJmF.png",  # Pon la URL aquí
+    },
+}
+
+
+RARITY_COLOR = {
+    "común": 0x95a5a6,
+    "raro": 0x3498db,
+    "épico": 0x9b59b6,
+    "legendario": 0xf1c40f,
+    "mítico": 0xff0000,
+}
+
+RARITY_STARS = {
+    "común": "⚪",
+    "raro": "🔵",
+    "épico": "🟣",
+    "legendario": "🌟",
+    "mítico": "🔱",
+}
+
+XP_PER_WIN = 50
+XP_PER_LOSS = 15
+COINS_WIN = 100
+COINS_LOSS = 20
+
+def xp_to_level_up(level):
+    return 100 * level
+
+def apply_level_bonus(base_stat, level):
+    """Aplica un bonus de stats según el nivel de la figura (+5% por nivel)"""
+    return int(base_stat * (1 + (level - 1) * 0.05))
+
+def get_figure_level(figure_data):
+    return figure_data.get("level", 1)
+
+def get_figure_xp(figure_data):
+    return figure_data.get("xp", 0)
+
+# ============================================================
+#  BOT SETUP
+# ============================================================
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
+bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+
+# ============================================================
+# ============================================================
+#  HABILIDADES POR FIGURA
+#  Tipos: "damage" | "heal" | "drain" | "drain_fill" (Segunda Fase)
+#  stun: True = aturde al rival 1 turno (no puede actuar)
+#  team_heal: True = cura también a los compañeros
+#  no_heal: True = Gamer64 no puede recuperar HP hasta el fin de la batalla
+#  fill_bar: True = llena la barra de energía completamente
+# ============================================================
+# ============================================================
+#  HABILIDADES POR FIGURA
+#  Tipos: "damage" | "heal" | "drain" | "drain_fill"
+#  Efectos especiales:
+#    stun: True              → aturde al rival 1 turno
+#    aoe: True               → daña a todo el equipo rival
+#    aoe_secondary_power: N  → daño a los otros 2 rivales (no al activo)
+#    team_heal: True         → cura también a compañeros
+#    team_heal_power: N      → HP que cura a cada compañero
+#    bar_bonus: N            → energía extra ganada (drain)
+#    no_heal: True           → el usuario no puede curarse hasta el final
+#    fill_bar: True          → llena la barra al máximo
+#    dmg_enemy: N            → daño adicional al rival (drain_fill)
+#    force_switch: True      → fuerza al rival a no poder usar esa figura por N turnos
+#    force_switch_turns: N   → cuántos turnos dura el bloqueo
+# ============================================================
+FIGURE_SKILLS = {
+    "gamer64": [
+        {
+            "name": "Heroic Pose",
+            "cost": 30,
+            "type": "team_atk_buff",
+            "power": 0,
+            "atk_buff": 10,            # +10 daño a todas las habilidades aliadas, acumulable
+            "team_buff": True,
+            "desc": "Gamer64 hace una pose heroica, dando +10 de daño a todas las habilidades de las figuras aliadas. ¡Acumulable!",
+        },
+        {
+            "name": "Cannon Arm",
+            "cost": 60,
+            "type": "damage",
+            "power": 15,
+            "stun": True,
+            "desc": "Transforma su brazo en un cañón y dispara un misil. Aturde al oponente 1 turno.",
+        },
+        {
+            "name": "Regeneración",
+            "cost": 100,
+            "type": "heal",
+            "power": 10,
+            "team_heal": True,
+            "team_heal_power": 12,
+            "desc": "Cura a Gamer64 y a sus compañeros de batalla.",
+        },
+    ],
+    "alex": [
+        {
+            "name": "Parry",
+            "cost": 30,
+            "type": "parry",        # Tipo especial: contraataca si el rival ataca este turno
+            "power": 0,             # Sin daño directo
+            "parry_dmg_pct": 25,    # Contraataca con 25% del HP máximo del rival
+            "desc": "Alex hace un parry. Si el rival ataca este turno, lo contraataca quitándole el 25% de su vida.",
+        },
+        {
+            "name": "Carga Estelar",
+            "cost": 60,
+            "type": "buff",         # Tipo buff: potencia el siguiente ataque
+            "power": 0,
+            "atk_buff": 15,         # Suma 15 de ATK temporal al siguiente golpe
+            "desc": "La estrella de Alex brilla y carga su poder. Su próximo golpe hará 35 de daño en vez de 20.",
+        },
+        {
+            "name": "Esfera Luminosa",
+            "cost": 100,
+            "type": "damage",
+            "power": 15,
+            "force_switch": True,
+            "force_switch_turns": 2,  # Ciega al rival 2 turnos
+            "desc": "Alex lanza una esfera de luz que explota, cegando al rival por 2 turnos y haciéndole daño.",
+        },
+    ],
+    "ringmaster": [
+        {
+            "name": "Grab a Bite",
+            "cost": 30,
+            "type": "damage",
+            "power": 10,
+            "stun": True,
+            "stun_turns": 2,           # stun extendido 2 turnos
+            "self_heal": 5,            # Caine se cura 5 HP (mitad del daño)
+            "desc": "Caine abre la boca, muerde al rival, se cura 5 HP y lo aturde 2 turnos.",
+        },
+        {
+            "name": "Digital Hallucinations",
+            "cost": 60,
+            "type": "damage",
+            "power": 25,
+            "force_switch": True,
+            "force_switch_turns": 3,   # fuerza cambio de figura
+            "desc": "Caine finge que son alucinaciones digitales, daña al rival y lo fuerza a cambiar de figura.",
+        },
+        {
+            "name": "Retributional Ringmaster",
+            "cost": 100,
+            "type": "retribution",     # contraataca con la mitad del daño recibido durante 1 turno
+            "power": 0,
+            "retrib_turns": 1,
+            "desc": "Caine recibe el daño de una figura y luego libera su enfado devolviendo la mitad.",
+        },
+    ],
+    "michibug": [
+        {
+            "name": "Counter",
+            "cost": 30,
+            "type": "michi_counter",   # parry especial: devuelve mitad del daño, 20% de que el rival no ataque
+            "power": 0,
+            "evade_chance": 20,        # 20% de que el rival pierda su turno
+            "desc": "Michi se pone en pose defensiva. Si el rival ataca, devuelve la mitad del daño. 20% de que el rival ni ataque.",
+        },
+        {
+            "name": "Glitch Manipulation",
+            "cost": 60,
+            "type": "glitch_dmg",      # daño aleatorio 2-45
+            "power": 0,
+            "min_dmg": 2,
+            "max_dmg": 45,
+            "desc": "Michi canaliza su poder glitch y lanza un objeto aleatorio al oponente. Daño: 2 a 45.",
+        },
+        {
+            "name": "Corruption",
+            "cost": 100,
+            "type": "corruption",      # copia una habilidad aleatoria del juego y la ejecuta
+            "power": 0,
+            "desc": "Michi acumula poder glitch y ejecuta una habilidad aleatoria de cualquier figura del juego.",
+        },
+    ],
+    "tails": [
+        {
+            "name": "Robot Buddy",
+            "cost": 30,
+            "type": "dot",
+            "power": 10,
+            "dot_turns": 3,
+            "dot_stackable": True,
+            "desc": "Tails lanza un robot al oponente. Hace 10 de daño cada turno por 3 turnos.",
+        },
+        {
+            "name": "Intelectual",
+            "cost": 60,
+            "type": "team_atk_buff",
+            "power": 0,
+            "atk_buff": 10,
+            "team_buff": True,
+            "desc": "Tails usa su intelecto para dar +10 ATK a todas las figuras aliadas. ¡Acumulable!",
+        },
+        {
+            "name": "Fly Away",
+            "cost": 100,
+            "type": "fly_away",        # Tails y el rival quedan bloqueados 3 turnos
+            "power": 0,
+            "fly_turns": 3,
+            "desc": "Tails agarra al rival y lo lleva volando. Ambas figuras quedan bloqueadas 3 turnos.",
+        },
+    ],
+    "hatred": [
+        {
+            "name": "Mass Infection",
+            "cost": 30,
+            "type": "damage",
+            "power": 30,
+            "dot": True,
+            "dot_power": 8,
+            "dot_turns": 4,
+            "desc": "1x se acerca y aplica Mass Infection: daño normal + veneno por 4 turnos.",
+        },
+        {
+            "name": "Entanglement",
+            "cost": 60,
+            "type": "damage",
+            "power": 10,
+            "stun": True,
+            "stun_turns": 2,
+            "entangle": True,      # el equipo aliado hace más daño a esta figura
+            "desc": "1x lanza su Entanglement: atrae al enemigo, lo stunea 2 turnos y las figuras aliadas le hacen más daño.",
+        },
+        {
+            "name": "Rejuvenate the Rotten",
+            "cost": 100,
+            "type": "revive_team",  # revive figuras aliadas muertas con stats fijos
+            "power": 20,            # daño propio
+            "revive_hp": 20,
+            "revive_atk": 10,
+            "revive_def": 15,
+            "revive_poison": True,  # las figuras revividas envenenan al atacar
+            "desc": "1x se clava sus espadas (-20 HP) y revive a todos los aliados caídos con 20HP/10ATK/15DEF. Los revividos envenenan al atacar.",
+        },
+    ],
+    "chicken": [
+        {
+            "name": "Switch Swords",
+            "cost": 30,
+            "type": "switch_sword",  # muestra menú para elegir espada
+            "power": 0,
+            "desc": "Shedletsky cambia su tipo de espada, preparándose para el siguiente ataque.",
+        },
+        {
+            "name": "Slash",
+            "cost": 60,
+            "type": "slash",         # usa la espada activa y aplica su efecto
+            "power": 50,
+            "desc": "Shedletsky ataca aplicando el efecto de su espada actual.",
+        },
+        {
+            "name": "Chicken Legs",
+            "cost": 100,
+            "type": "heal_team_self", # +25 aliados, +30 a sí mismo
+            "power": 30,              # curación propia
+            "team_heal_power": 25,
+            "desc": "Shedletsky saca una cubeta de pollo y cura +30 HP propio y +25 a todos los aliados.",
+        },
+    ],
+    "blackout": [
+        {
+            "name": "Chase Up",
+            "cost": 30,
+            "type": "drain",
+            "power": 10,           # se daña 10 HP
+            "bar_bonus": 30,       # recarga la barra extra
+            "desc": "El Impostor recarga su barra de carga a costa de 10 HP.",
+        },
+        {
+            "name": "Fast Kill",
+            "cost": 60,
+            "type": "fast_kill",   # requiere 3 usos seguidos
+            "power": 190,
+            "charges_needed": 3,
+            "desc": "El Impostor se acerca y clava su cuchillo. Úsalo 3 turnos seguidos para activarlo.",
+        },
+        {
+            "name": "Consumed By Fury",
+            "cost": 100,
+            "type": "consumed_fury",  # mata activa + 15 a otras + impostor muere
+            "power": 0,
+            "splash_dmg": 15,
+            "desc": "El Impostor se avalanza, mata a la figura activa enemiga, hace 15 a las otras 2 y luego explota.",
+        },
+    ],
+    "lobster": [
+        {
+            "name": "LOBSTER",
+            "cost": 30,
+            "type": "lobster",     # No hace nada... o sí?
+            "power": 0,
+            "desc": "La langosta te mira fijamente. No pasa nada. O casi nada.",
+        },
+        {
+            "name": "LOBSTER",
+            "cost": 60,
+            "type": "lobster",
+            "power": 0,
+            "desc": "La langosta te mira fijamente. No pasa nada. O casi nada.",
+        },
+        {
+            "name": "LOBSTER",
+            "cost": 100,
+            "type": "lobster",
+            "power": 0,
+            "desc": "La langosta te mira fijamente. No pasa nada. O casi nada.",
+        },
+    ],
+    "agustoloco": [
+        {
+            "name": "Fumada",
+            "cost": 30,
+            "type": "gamble",       # 50/50: cura hasta 150 HP O baja a 1 HP y reduce ATK
+            "power": 0,
+            "gamble_heal": 150,     # Si sale bien: HP sube a 150 (nuevo máximo temporal)
+            "gamble_atk_debuff": 5, # Si sale mal: ATK baja 5 puntos
+            "desc": "50/50: O AgustoLoco se cura hasta 150 HP (¡nuevo máximo!) o cae a 1 HP y pierde ATK.",
+        },
+        {
+            "name": "Mechero",
+            "cost": 60,
+            "type": "gamble_fire",  # Probabilidad bajísima (<1%) de hacer daño enorme. Falla casi siempre.
+            "power": 0,
+            "fire_dmg": 80,         # Daño si el mechero funciona
+            "fire_chance": 1,       # 1% de probabilidad
+            "fire_immune_check": True,  # No funciona si el rival es inmune al fuego
+            "desc": "El mechero tiene menos del 1% de funcionar. Si lo hace, deja muy herido al rival.",
+        },
+        {
+            "name": "Peso",
+            "cost": 100,
+            "type": "damage",
+            "power": 30,
+            "desc": "AgustoLoco lanza su único peso con toda su fuerza.",
+        },
+    ],
+    "sonic": [
+        {
+            "name": "Spindash",
+            "cost": 30,
+            "type": "damage",
+            "power": 25,                 # daño al activo rival
+            "aoe": True,                 # golpea a todo el equipo rival
+            "aoe_secondary_power": 20,   # daño a los otros 2
+            "desc": "Sonic agarra velocidad y hace un Spindash hacia el frente, dañando a todos los enemigos.",
+        },
+        {
+            "name": "Homing Attack",
+            "cost": 60,
+            "type": "damage",
+            "power": 30,
+            "desc": "Sonic salta y se lanza directamente al enemigo, dándole un golpe fuerte y certero.",
+        },
+        {
+            "name": "Speed Power",
+            "cost": 100,
+            "type": "damage",
+            "power": 50,
+            "force_switch": True,        # fuerza cambio de figura en el rival
+            "force_switch_turns": 3,     # no puede volver a esa figura por 3 turnos
+            "desc": "Sonic corre a máxima velocidad y golpea al rival, dejándolo fuera de combate por 3 turnos.",
+        },
+    ],
+}
+
+
+# ============================================================
+#  SISTEMA DE BATALLAS NUEVO (3 figuras + barra de energía)
+# ============================================================
+active_battles = {}
+pending_pvp = {}
+
+ENERGY_PER_TURN = 20
+ENERGY_MAX = 100
+
+def make_fighter(fig_key, owner_fig_data):
+    """Crea un luchador con HP, energía y habilidades listas."""
+    fig = FIGURES[fig_key]
+    lvl = owner_fig_data.get("level", 1)
+    fighter = {
+        "key":      fig_key,
+        "name":     fig["name"],
+        "emoji":    fig["emoji"],
+        "hp":       apply_level_bonus(fig["hp"], lvl),
+        "max_hp":   apply_level_bonus(fig["hp"], lvl),
+        "atk":      apply_level_bonus(fig["attack"], lvl),
+        "defense":  apply_level_bonus(fig["defense"], lvl),
+        "level":    lvl,
+        "energy":   0,
+        "skills":   FIGURE_SKILLS.get(fig_key, FIGURE_SKILLS["gamer64"]),
+        "image":    fig.get("image", ""),
+    }
+    # Pasiva de Gamer64: revive una vez con el 80% de su HP máximo
+    if fig_key == "gamer64":
+        fighter["passive_revive"] = True
+
+    # Pasiva de Caine: WHY DO YOU PEOPLE TORMENT ME
+    # Cuando HP < 30%: daño x4 pero muere en 5 turnos
+    if fig_key == "ringmaster":
+        fighter["passive_torment_active"] = False
+        fighter["passive_torment_turns"] = 0
+    return fighter
+
+class BattleState:
+    def __init__(self, p1_id, p2_id, p1_team_keys, p2_team_keys,
+                 p1_figs_data, p2_figs_data, is_bot=False):
+        self.p1 = p1_id
+        self.p2 = p2_id
+        self.is_bot = is_bot
+
+        # Equipos: lista de fighters
+        self.p1_team = [make_fighter(k, next((f for f in p1_figs_data if f["key"]==k), {"level":1})) for k in p1_team_keys]
+        self.p2_team = [make_fighter(k, next((f for f in p2_figs_data if f["key"]==k), {"level":1})) for k in p2_team_keys]
+
+        self.p1_active = 0   # índice del luchador activo
+        self.p2_active = 0
+
+        # Claves para recompensas
+        self.p1_team_keys = p1_team_keys
+        self.p2_team_keys = p2_team_keys
+
+        self.turn = 1
+        self.log = []
+        self.message = None
+        self.p1_name = "Jugador 1"   # se sobreescribe desde pvpbot/retar
+        self.p2_name = "Jugador 2"
+
+    def current_p1(self): return self.p1_team[self.p1_active]
+    def current_p2(self): return self.p2_team[self.p2_active]
+
+    def hp_bar(self, current, maximum):
+        ratio = max(0, current / maximum)
+        filled = int(ratio * 10)
+        return "🟩" * filled + "⬛" * (10 - filled) + f" {current}/{maximum}"
+
+    def energy_bar(self, energy, color="blue"):
+        """color="blue" para el jugador, color="red" para el enemigo."""
+        filled_block = "🟦" if color == "blue" else "🟥"
+        bar = ""
+        for i in range(10):
+            pos = (i + 1) * 10
+            if pos <= energy:
+                if pos == 30:   bar += "🟡"
+                elif pos == 60: bar += "🟠"
+                elif pos == 100:bar += "🔴"
+                else:           bar += filled_block
+            else:
+                bar += "⬛"
+        return bar + f" {energy}/100"
+
+    def calc_damage(self, atk, defense, power):
+        raw = int(atk * (power / 100)) + random.randint(-3, 8)
+        return max(1, raw - (defense // 4))
+
+    def alive_team(self, team):
+        return [f for f in team if f["hp"] > 0]
+
+    def next_alive(self, team, current_idx):
+        # Busca la siguiente figura viva y no bloqueada
+        for i in range(current_idx + 1, len(team)):
+            if team[i]["hp"] > 0 and not team[i].get("force_locked", 0) > 0:
+                return i
+        # Si todas están bloqueadas, busca al menos una viva
+        for i in range(current_idx + 1, len(team)):
+            if team[i]["hp"] > 0:
+                return i
+        return None
+
+    def tick_locks(self):
+        """Reduce el contador force_locked de todas las figuras al inicio de cada turno."""
+        for fig in self.p1_team + self.p2_team:
+            if fig.get("force_locked", 0) > 0:
+                fig["force_locked"] -= 1
+
+    def get_embed(self, title="⚔️ BATALLA"):
+        f1 = self.current_p1()
+        f2 = self.current_p2()
+        embed = discord.Embed(title=title, color=0xe74c3c)
+
+        p1_label = self.p1_name
+        p2_label = self.p2_name
+
+        # --- Equipo jugador 1 ---
+        team1_str = ""
+        for i, f in enumerate(self.p1_team):
+            active_mark = " ◀ EN COMBATE" if i == self.p1_active else ""
+            if f["hp"] <= 0:
+                team1_str += f"💀 ~~{f['emoji']} {f['name']}~~{active_mark}\n"
+            else:
+                team1_str += (
+                    f"{f['emoji']} **{f['name']}**{active_mark}\n"
+                    f"Vida: {self.hp_bar(f['hp'], f['max_hp'])}\n"
+                )
+        embed.add_field(name=f"👤 {p1_label}", value=team1_str, inline=True)
+
+        # --- Equipo jugador 2 ---
+        team2_str = ""
+        for i, f in enumerate(self.p2_team):
+            active_mark = " ◀ EN COMBATE" if i == self.p2_active else ""
+            if f["hp"] <= 0:
+                team2_str += f"💀 ~~{f['emoji']} {f['name']}~~{active_mark}\n"
+            else:
+                team2_str += (
+                    f"{f['emoji']} **{f['name']}**{active_mark}\n"
+                    f"Vida: {self.hp_bar(f['hp'], f['max_hp'])}\n"
+                )
+        embed.add_field(name=f"👤 {p2_label}", value=team2_str, inline=True)
+
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
+
+        # --- Figura activa P1: vida + energía (azul) + habilidades ---
+        type_emoji = {"damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️","buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐","dot":"💣","bad_update":"🔳","ban_hammer":"🔨"}
+        skill_info = ""
+        for sk in f1["skills"]:
+            can = f1["energy"] >= sk["cost"]
+            lock = "✅" if can else "🔒"
+            t = type_emoji.get(sk["type"], "⚡")
+            skill_info += f"{lock} {t} **{sk['name']}** `[{sk['cost']}⚡]`\n"
+
+        embed.add_field(
+            name=f"🔵 {p1_label} — {f1['emoji']} {f1['name']}",
+            value=(
+                f"**Vida:** {self.hp_bar(f1['hp'], f1['max_hp'])}\n"
+                f"**Energía (tuya):** {self.energy_bar(f1['energy'], 'blue')}\n"
+                f"─────────────────\n"
+                f"{skill_info}"
+            ),
+            inline=False
+        )
+
+        # --- Figura activa P2: energía visible (roja) ---
+        embed.add_field(
+            name=f"🔴 {p2_label} — {f2['emoji']} {f2['name']}",
+            value=(
+                f"**Vida:** {self.hp_bar(f2['hp'], f2['max_hp'])}\n"
+                f"**Energía (rival):** {self.energy_bar(f2['energy'], 'red')}\n"
+            ),
+            inline=False
+        )
+
+        if self.log:
+            embed.add_field(name="📜 Último turno", value="\n".join(self.log[-4:]), inline=False)
+
+        if self.turn == 1:
+            embed.set_footer(text=f"🎮 Turno de {p1_label} — elige una habilidad (✅ = disponible)")
+        else:
+            embed.set_footer(text=f"🎮 Turno de {p2_label}...")
+
+        if f1.get("image"):
+            embed.set_thumbnail(url=f1["image"])
+
+        return embed
+
+class BattleView(discord.ui.View):
+    """View de batalla sin expiración."""
+    def __init__(self, battle: BattleState):
+        super().__init__(timeout=None)
+        self.battle = battle
+
+def get_battle_view(battle: BattleState):
+    """Genera los botones de habilidad según la energía actual del luchador activo."""
+    view = BattleView(battle)
+    cur_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+    cur_idx   = battle.p1_active if battle.turn == 1 else battle.p2_active
+    f = cur_team[cur_idx]
+
+    # Fila 0: Atacar + Cambiar figura
+    atk_btn = discord.ui.Button(
+        label="⚔️ Atacar (gratis)",
+        style=discord.ButtonStyle.success,
+        custom_id="basic_attack",
+        row=0
+    )
+    atk_btn.callback = make_skill_callback(-2, battle)
+    view.add_item(atk_btn)
+
+    # Botón cambiar figura (solo si hay otra figura viva y no bloqueada)
+    switchable = [i for i, fig in enumerate(cur_team)
+                  if i != cur_idx and fig["hp"] > 0 and not fig.get("force_locked", 0) > 0]
+    if switchable:
+        sw_btn = discord.ui.Button(
+            label="🔄 Cambiar figura",
+            style=discord.ButtonStyle.primary,
+            custom_id="switch_figure",
+            row=0
+        )
+        sw_btn.callback = make_switch_callback(battle, switchable, cur_team)
+        view.add_item(sw_btn)
+
+    # Botón especial Switch Swords si Shedletsky está activo
+    if f.get("key") == "chicken":
+        swords = ["linked","firebrand","venomshank","windforce","darkheart","illumina","ghostwalker","ice_dagger"]
+        sword_names = {"linked":"Linked Sword","firebrand":"Firebrand 🔥","venomshank":"Venomshank ☠️",
+                       "windforce":"Windforce 🌪️","darkheart":"Darkheart 🖤","illumina":"Illumina ✨",
+                       "ghostwalker":"Ghostwalker 👻","ice_dagger":"Ice Dagger 🧊"}
+        current_sword = f.get("active_sword", "linked")
+        options = [discord.SelectOption(
+            label=sword_names[s],
+            value=s,
+            default=(s == current_sword)
+        ) for s in swords]
+        sword_select = discord.ui.Select(placeholder=f"🗡️ Espada actual: {sword_names[current_sword]}", options=options, row=2)
+        async def sword_cb(inter: discord.Interaction, fig=f):
+            if inter.user.id not in (battle.p1, battle.p2):
+                await inter.response.send_message("❌ No eres parte de esta batalla.", ephemeral=True)
+                return
+            chosen = sword_select.values[0]
+            prev = fig.get("active_sword", "linked")
+            fig["active_sword"] = chosen
+            # Resetear cargas de Ice Dagger si cambia de espada
+            if prev != chosen and prev == "ice_dagger":
+                fig["ice_dagger_charges"] = 0
+                battle.log = [f"🗡️ **{fig['name']}** cambia a **{sword_names[chosen]}**! ❄️ Carga de Ice Dagger perdida."]
+            else:
+                battle.log = [f"🗡️ **{fig['name']}** equipa **{sword_names[chosen]}**!"]
+            await inter.response.edit_message(embed=battle.get_embed(), view=get_battle_view(battle))
+        sword_select.callback = sword_cb
+        view.add_item(sword_select)
+
+    # Fila 1: Habilidades especiales
+    type_emoji = {"damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️",
+                  "buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐",
+                  "dot":"💣","bad_update":"🔳","ban_hammer":"🔨","fly_away":"✈️"}
+    for i, skill in enumerate(f["skills"]):
+        can_use = f["energy"] >= skill["cost"]
+        t_emoji = type_emoji.get(skill["type"], "⚡")
+        style = discord.ButtonStyle.danger if can_use else discord.ButtonStyle.secondary
+        btn = discord.ui.Button(
+            label=f"{t_emoji} {skill['name']} [{skill['cost']}⚡]",
+            style=style,
+            disabled=not can_use,
+            custom_id=f"skill_{i}",
+            row=1
+        )
+        btn.callback = make_skill_callback(i, battle)
+        view.add_item(btn)
+
+    return view
+
+def make_switch_callback(battle: BattleState, switchable: list, cur_team: list):
+    """Muestra un selector de figura en el canal y ejecuta el cambio (cuesta el turno)."""
+    async def callback(interaction: discord.Interaction):
+        uid = interaction.user.id
+        if battle.turn == 1 and uid != battle.p1:
+            await interaction.response.send_message("❌ No es tu turno.", ephemeral=True)
+            return
+        if battle.turn == 2 and not battle.is_bot and uid != battle.p2:
+            await interaction.response.send_message("❌ No es tu turno.", ephemeral=True)
+            return
+
+        options = []
+        for i in switchable:
+            fig = cur_team[i]
+            options.append(discord.SelectOption(
+                label=f"{fig['name']} (HP: {fig['hp']}/{fig['max_hp']})",
+                value=str(i),
+                emoji=fig["emoji"],
+                description=f"Nv.{fig.get('level',1)} | ATK:{fig['atk']} DEF:{fig['defense']}"
+            ))
+
+        select = discord.ui.Select(placeholder="¿A qué figura cambias?", options=options)
+
+        async def select_cb(inter: discord.Interaction):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu selección.", ephemeral=True)
+                return
+
+            chosen = int(select.values[0])
+            old_fig = cur_team[battle.p1_active if battle.turn == 1 else battle.p2_active]
+            if battle.turn == 1:
+                battle.p1_active = chosen
+            else:
+                battle.p2_active = chosen
+            new_fig = cur_team[chosen]
+            battle.log = [
+                f"🔄 **{old_fig['name']}** sale. ¡Entra **{new_fig['emoji']} {new_fig['name']}**!",
+                "   (Cambio de figura — el rival ataca este turno)"
+            ]
+
+            # El cambio cuesta el turno: pasa al rival
+            battle.turn = 2 if battle.turn == 1 else 1
+            channel_id = inter.channel_id
+
+            # Cerrar el ephemeral del selector
+            await inter.response.defer()
+
+            # Editar el mensaje original de la batalla (siempre disponible)
+            if battle.message:
+                if battle.is_bot and battle.turn == 2:
+                    await battle.message.edit(embed=battle.get_embed(), view=None)
+                    await asyncio.sleep(1.2)
+                    await bot_turn(inter, battle, channel_id)
+                else:
+                    await battle.message.edit(embed=battle.get_embed(), view=get_battle_view(battle))
+            else:
+                # Fallback: enviar nuevo mensaje
+                if battle.is_bot and battle.turn == 2:
+                    msg = await inter.channel.send(embed=battle.get_embed())
+                    battle.message = msg
+                    await asyncio.sleep(1.2)
+                    await bot_turn(inter, battle, channel_id)
+                else:
+                    msg = await inter.channel.send(embed=battle.get_embed(), view=get_battle_view(battle))
+                    battle.message = msg
+
+        select.callback = select_cb
+        sw_view = discord.ui.View(timeout=120)
+        sw_view.add_item(select)
+
+        # El selector sale como ephemeral para no sobreescribir el mensaje de batalla
+        await interaction.response.send_message(
+            embed=battle.get_embed(title="🔄 Elige tu figura de reemplazo"),
+            view=sw_view,
+            ephemeral=True
+        )
+
+    return callback
+
+def make_skill_callback(skill_idx, battle: BattleState):
+    async def callback(interaction: discord.Interaction):
+        uid = interaction.user.id
+        channel_id = interaction.channel_id
+
+        if channel_id not in active_battles:
+            await interaction.response.send_message("❌ No hay batalla activa.", ephemeral=True)
+            return
+        if battle.turn == 1 and uid != battle.p1:
+            await interaction.response.send_message("❌ No es tu turno.", ephemeral=True)
+            return
+        if battle.turn == 2 and not battle.is_bot and uid != battle.p2:
+            await interaction.response.send_message("❌ No es tu turno.", ephemeral=True)
+            return
+
+        await execute_action(interaction, battle, skill_idx, channel_id)
+    return callback
+
+async def execute_action(interaction, battle: BattleState, skill_idx: int, channel_id: int):
+    """Ejecuta la acción del jugador activo."""
+    attacker = battle.current_p1() if battle.turn == 1 else battle.current_p2()
+    defender = battle.current_p2() if battle.turn == 1 else battle.current_p1()
+    atk_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+    battle.log = []
+
+    # Reducir contadores de bloqueo
+    battle.tick_locks()
+
+    # Pasiva de Caine: WHY DO YOU PEOPLE TORMENT ME
+    if attacker.get("passive_torment_active"):
+        attacker["passive_torment_turns"] -= 1
+        if attacker["passive_torment_turns"] <= 0:
+            attacker["hp"] = 0
+            battle.log.append(f"💀 **{attacker['emoji']} {attacker['name']}**: **¡¿PORQUE SIEMPRE ME ATORMENTAN?! ¡HUMANOS INSOLENTES!**")
+            battle.log.append(f"   ...y cae derrotado por su propia furia.")
+    elif attacker.get("key") == "ringmaster":
+        hp_pct = attacker["hp"] / attacker["max_hp"]
+        if hp_pct < 0.30 and not attacker.get("passive_torment_active"):
+            attacker["passive_torment_active"] = True
+            attacker["passive_torment_turns"] = 5
+            attacker["atk"] = attacker["atk"] * 4   # daño x4
+            battle.log.append(f"😡 **{attacker['emoji']} {attacker['name']}**: **¡¿POR QUÉ ME ATORMENTAN?!**")
+            battle.log.append(f"   ¡Su daño se CUADRUPLICA... pero morirá en 5 turnos!")
+
+    # Aplicar daño DOT (veneno/bomba) al atacante al inicio de su turno
+    if attacker.get("dots"):
+        total_dot = 0
+        remaining = []
+        for dot in attacker["dots"]:
+            attacker["hp"] = max(0, attacker["hp"] - dot["dmg"])
+            total_dot += dot["dmg"]
+            dot["turns"] -= 1
+            if dot["turns"] > 0:
+                remaining.append(dot)
+        attacker["dots"] = remaining
+        battle.log.append(f"☠️ **{attacker['name']}** recibe **{total_dot}** de daño de veneno/bomba!")
+        if attacker["hp"] <= 0:
+            def_team = battle.p1_team if battle.turn == 1 else battle.p2_team
+            def_idx_attr = "p1_active" if battle.turn == 1 else "p2_active"
+            current_idx = getattr(battle, def_idx_attr)
+            next_idx = battle.next_alive(def_team, current_idx)
+            if next_idx is not None:
+                setattr(battle, def_idx_attr, next_idx)
+                battle.log.append(f"💀 **{attacker['name']}** murió por el veneno!")
+            else:
+                await end_battle(interaction, battle, channel_id, winner_turn=2 if battle.turn==1 else 1)
+                return
+
+    # Verificar si está aturdido (con soporte de stun_turns)
+    if attacker.get("stun_turns", 0) > 0:
+        attacker["stun_turns"] -= 1
+        battle.log.append(f"😵 **{attacker['name']}** está aturdido y pierde su turno! ({attacker['stun_turns']} turnos restantes)")
+        battle.turn = 2 if battle.turn == 1 else 1
+        await finish_turn(interaction, battle, channel_id)
+        return
+    elif attacker.get("stunned"):
+        attacker["stunned"] = False
+        battle.log.append(f"😵 **{attacker['name']}** está aturdido y pierde su turno!")
+        battle.turn = 2 if battle.turn == 1 else 1
+        await finish_turn(interaction, battle, channel_id)
+        return
+
+    # Siempre subir energía al inicio del turno
+    attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + ENERGY_PER_TURN)
+
+    if skill_idx == -2:
+        # Resetear fast_kill si usa ataque básico
+        if attacker.get("fast_kill_charges", 0) > 0:
+            attacker["fast_kill_charges"] = 0
+            battle.log.append(f"   ⚠️ **{attacker['name']}** interrumpió la carga de **Fast Kill**!")
+        # Ataque básico — gana 20 de energía + daño = mitad del power máximo de la figura
+        attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + ENERGY_PER_TURN)
+        bonus_atk = attacker.pop("atk_buff", 0)
+        effective_atk = attacker["atk"] + bonus_atk
+        # Daño = mitad del power de la habilidad más fuerte (skill cost 100), mínimo 1
+        max_power = max((sk.get("power", 0) for sk in attacker["skills"]), default=20)
+        base_dmg = max(1, round(max_power / 2))
+        dmg = max(1, base_dmg + (bonus_atk // 2) + random.randint(-2, 3) - (defender["defense"] // 6))
+        defender["hp"] = max(0, defender["hp"] - dmg)
+        buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
+        battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** ataca{buff_txt} → **{dmg}** daño! (+20⚡)")
+        # Parry check
+        if defender.get("parrying"):
+            defender["parrying"] = False
+            pct = defender.get("parry_dmg_pct", 25)
+            counter_dmg = int(defender["max_hp"] * pct / 100)
+            attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+            battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño!")
+    else:
+        skill = attacker["skills"][skill_idx]
+        if attacker["energy"] < skill["cost"]:
+            await interaction.response.send_message("❌ No tienes suficiente energía.", ephemeral=True)
+            return
+
+        # Si no usa fast_kill, resetea los cargos acumulados
+        if skill["type"] != "fast_kill" and attacker.get("fast_kill_charges", 0) > 0:
+            attacker["fast_kill_charges"] = 0
+            battle.log.append(f"   ⚠️ **{attacker['name']}** interrumpió la carga de **Fast Kill**!")
+
+        attacker["energy"] -= skill["cost"]
+        stype = skill["type"]
+
+        if stype == "damage":
+            # Aplicar buff de ATK temporal si existe (Carga Estelar de Alex)
+            bonus_atk = attacker.pop("atk_buff", 0)
+            # Bonus si el defensor está enredado
+            entangle_bonus = 15 if defender.get("entangled") else 0
+            effective_atk = attacker["atk"] + bonus_atk + entangle_bonus
+            dmg = battle.calc_damage(effective_atk, defender["defense"], skill["power"])
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            buff_txt = f" (⭐+{bonus_atk} ATK)" if bonus_atk else ""
+            battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**{buff_txt} → **{dmg}** daño!")
+            battle.log.append(f"   _{skill['desc']}_")
+            # revive_poisoner: figura revivida por 1x envenena al atacar
+            if attacker.get("revive_poisoner"):
+                if "dots" not in defender: defender["dots"] = []
+                defender["dots"].append({"dmg": 6, "turns": 3})
+                battle.log.append(f"   ☠️ ¡**{attacker['name']}** (revivida) envenena a **{defender['name']}**! (6 daño/turno x3)")
+
+            # self_heal: Caine se cura al hacer daño
+            if skill.get("self_heal") and not attacker.get("no_heal"):
+                heal_amt = skill["self_heal"]
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal_amt)
+                battle.log.append(f"   💚 **{attacker['name']}** se cura **{heal_amt}** HP!")
+
+            # ¿El defensor está en parry o retribución? → contraataca
+            if defender.get("retributing"):
+                retrib_dmg = max(1, dmg // 2)
+                attacker["hp"] = max(0, attacker["hp"] - retrib_dmg)
+                defender["retrib_turns"] = defender.get("retrib_turns", 1) - 1
+                if defender["retrib_turns"] <= 0:
+                    defender["retributing"] = False
+                battle.log.append(f"   🦷 **{defender['emoji']} {defender['name']}** devuelve **{retrib_dmg}** daño (¡Retribución!)!")
+
+            if defender.get("parrying"):
+                defender["parrying"] = False
+                if defender.get("parry_return_half"):
+                    defender.pop("parry_return_half", None)
+                    counter_dmg = max(1, dmg // 2)
+                    attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+                    battle.log.append(f"   🦊 **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño (mitad del recibido)!")
+                else:
+                    pct = defender.get("parry_dmg_pct", 25)
+                    counter_dmg = int(defender["max_hp"] * pct / 100)
+                    attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+                    battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño ({pct}% HP)!")
+
+            # Entangle: la figura queda enredada (aliados le hacen más daño)
+            if skill.get("entangle"):
+                defender["entangled"] = True
+                battle.log.append(f"   🕸️ ¡**{defender['name']}** queda enredado! Los aliados le harán +15 daño!")
+
+            # Efecto stun (con soporte de stun_turns extendido)
+            if skill.get("stun") and not defender.get("stun_immune"):
+                stun_t = skill.get("stun_turns", 1)
+                if stun_t > 1:
+                    defender["stun_turns"] = stun_t
+                    battle.log.append(f"   😵 ¡**{defender['name']}** queda aturdido {stun_t} turnos!")
+                else:
+                    defender["stunned"] = True
+                    battle.log.append(f"   😵 ¡**{defender['name']}** queda aturdido 1 turno!")
+
+            # Dot inline (Mass Infection de 1x1x1x1)
+            if skill.get("dot"):
+                if "dots" not in defender: defender["dots"] = []
+                defender["dots"].append({"dmg": skill.get("dot_power", 8), "turns": skill.get("dot_turns", 4)})
+                battle.log.append(f"   ☠️ ¡**{defender['name']}** infectado! ({skill.get('dot_power',8)} daño/turno x{skill.get('dot_turns',4)})")
+
+            # Efecto AOE — daña a todo el equipo rival
+            if skill.get("aoe"):
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                sec_power = skill.get("aoe_secondary_power", skill["power"])
+                hit = []
+                for fig in def_team:
+                    if fig is not defender and fig["hp"] > 0:
+                        sec_dmg = battle.calc_damage(attacker["atk"], fig["defense"], sec_power)
+                        fig["hp"] = max(0, fig["hp"] - sec_dmg)
+                        hit.append(f"{fig['emoji']} {fig['name']} -{sec_dmg}HP")
+                if hit:
+                    battle.log.append(f"   💥 AOE: {' | '.join(hit)}")
+
+            # Efecto force_switch — bloquea la figura golpeada N turnos
+            if skill.get("force_switch"):
+                turns = skill.get("force_switch_turns", 3)
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                for fig in def_team:
+                    if fig is defender:
+                        fig["force_locked"] = turns
+                        break
+                # Forzar cambio al siguiente disponible no bloqueado
+                def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+                current_idx = getattr(battle, def_idx_attr)
+                for i, fig in enumerate(def_team):
+                    if fig["hp"] > 0 and not fig.get("force_locked", 0) > 0 and i != current_idx:
+                        setattr(battle, def_idx_attr, i)
+                        battle.log.append(f"   🔒 ¡**{defender['name']}** bloqueada {turns} turnos! Entra **{fig['emoji']} {fig['name']}**!")
+                        break
+                else:
+                    battle.log.append(f"   🔒 ¡**{defender['name']}** bloqueada {turns} turnos!")
+
+        elif stype == "heal":
+            # Respetar no_heal
+            if attacker.get("no_heal"):
+                battle.log.append(f"❌ **{attacker['name']}** no puede recuperar vida hasta el fin de la batalla!")
+            else:
+                heal = int(skill["power"] + random.randint(-2, 5))
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal)
+                battle.log.append(f"💚 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → +**{heal}** HP!")
+            # Curación a compañeros
+            if skill.get("team_heal"):
+                t_heal = skill.get("team_heal_power", 10)
+                healed = []
+                for ally in atk_team:
+                    if ally is not attacker and ally["hp"] > 0:
+                        ally["hp"] = min(ally["max_hp"], ally["hp"] + t_heal)
+                        healed.append(f"{ally['emoji']} {ally['name']} +{t_heal}HP")
+                if healed:
+                    battle.log.append(f"   💚 Compañeros curados: {', '.join(healed)}")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "drain":
+            self_dmg = skill["power"]
+            bar_bonus = skill.get("bar_bonus", 20)
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
+            attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + bar_bonus)
+            battle.log.append(f"⚡ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   -{self_dmg} HP propio | +{bar_bonus}⚡ extra! _{skill['desc']}_")
+
+        elif stype == "drain_fill":
+            self_dmg = skill["power"]
+            enemy_dmg = skill.get("dmg_enemy", 0)
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
+            if skill.get("no_heal"):
+                attacker["no_heal"] = True
+            if skill.get("fill_bar"):
+                attacker["energy"] = ENERGY_MAX
+            if enemy_dmg > 0:
+                defender["hp"] = max(0, defender["hp"] - enemy_dmg)
+            battle.log.append(f"🔴 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   -{self_dmg} HP propio (¡irrecuperable!) | -{enemy_dmg} al rival | ¡Barra al máximo!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "team_atk_buff":
+            # Heroic Pose — buff de ATK acumulable al equipo completo
+            buff = skill.get("atk_buff", 15)
+            for ally in atk_team:
+                if ally["hp"] > 0:
+                    ally["atk_buff"] = ally.get("atk_buff", 0) + buff
+            battle.log.append(f"⭐ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   Todo el equipo gana +{buff} ATK (acumulable, se consume al atacar)!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "dot":
+            # Throwable Bomb — daño por turnos acumulable
+            dot_dmg = skill["power"]
+            dot_turns = skill.get("dot_turns", 3)
+            if "dots" not in defender:
+                defender["dots"] = []
+            defender["dots"].append({"dmg": dot_dmg, "turns": dot_turns})
+            battle.log.append(f"💣 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   ¡{dot_dmg} de daño por turno durante {dot_turns} turnos! (¡Acumulable!)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "bad_update":
+            # Roblox — daño aleatorio a enemigos + cura aliados
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            dmg_roll = random.choice([4, 6, 8])
+            heal_roll = dmg_roll // 2
+            dmg_hits = []
+            for fig in def_team:
+                if fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - dmg_roll)
+                    dmg_hits.append(f"{fig['emoji']} -{dmg_roll}HP")
+            heal_hits = []
+            for ally in atk_team:
+                if ally["hp"] > 0 and not ally.get("no_heal"):
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + heal_roll)
+                    heal_hits.append(f"{ally['emoji']} +{heal_roll}HP")
+            battle.log.append(f"🔳 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** (daño: {dmg_roll})!")
+            if dmg_hits: battle.log.append(f"   💥 Enemigos: {' | '.join(dmg_hits)}")
+            if heal_hits: battle.log.append(f"   💚 Aliados: {' | '.join(heal_hits)}")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "fly_away":
+            # Tails — bloquea a Tails y al rival 3 turnos, entran sustitutos
+            turns = skill.get("fly_turns", 3)
+            attacker["force_locked"] = turns
+            defender["force_locked"] = turns
+            battle.log.append(f"🦊 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   ✈️ ¡**{attacker['name']}** y **{defender['name']}** vuelan lejos {turns} turnos!")
+            # Forzar cambio de figura del atacante
+            atk_idx_attr = "p1_active" if battle.turn == 1 else "p2_active"
+            cur_atk_idx = getattr(battle, atk_idx_attr)
+            next_atk = battle.next_alive(atk_team, cur_atk_idx)
+            if next_atk is not None:
+                setattr(battle, atk_idx_attr, next_atk)
+                new_atk = atk_team[next_atk]
+                battle.log.append(f"   🔄 Entra **{new_atk['emoji']} {new_atk['name']}** por tu equipo!")
+            # Forzar cambio de figura del defensor
+            def_team_fw = battle.p2_team if battle.turn == 1 else battle.p1_team
+            def_idx_attr_fw = "p2_active" if battle.turn == 1 else "p1_active"
+            cur_def_idx = getattr(battle, def_idx_attr_fw)
+            next_def = battle.next_alive(def_team_fw, cur_def_idx)
+            if next_def is not None:
+                setattr(battle, def_idx_attr_fw, next_def)
+                new_def = def_team_fw[next_def]
+                battle.log.append(f"   🔄 Entra **{new_def['emoji']} {new_def['name']}** por el equipo rival!")
+            elif battle.next_alive(def_team_fw, -1) is None:
+                # Todo el equipo rival bloqueado = victoria
+                await end_battle(interaction, battle, channel_id, winner_turn=battle.turn)
+                return
+
+        elif stype == "retribution":
+            # Caine — Retributional Ringmaster: devuelve mitad del daño recibido 1 turno
+            attacker["retributing"] = True
+            attacker["retrib_turns"] = skill.get("retrib_turns", 1)
+            battle.log.append(f"🦷 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   ¡Caine está listo para devolver la mitad del daño que reciba!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "michi_counter":
+            # MichiBug — Counter: devuelve mitad del daño, 20% de que el rival no ataque
+            evade = skill.get("evade_chance", 20)
+            if random.randint(1, 100) <= evade:
+                # El rival pierde su turno
+                defender["stunned"] = True
+                battle.log.append(f"🦊 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+                battle.log.append(f"   ✨ ¡**{defender['name']}** ni siquiera llega a atacar! Pierde su turno.")
+            else:
+                # Funciona como parry normal: devuelve mitad del daño del rival
+                attacker["parrying"] = True
+                attacker["parry_return_half"] = True   # flag especial: devuelve mitad del dmg recibido
+                battle.log.append(f"🦊 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** y espera el ataque...")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "glitch_dmg":
+            # MichiBug — Glitch Manipulation: daño aleatorio 2-45
+            lo = skill.get("min_dmg", 2)
+            hi = skill.get("max_dmg", 45)
+            raw_dmg = random.randint(lo, hi)
+            dmg = max(1, raw_dmg - (defender["defense"] // 4))
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"🌀 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño! (roll: {raw_dmg})")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "corruption":
+            # MichiBug — Corruption: copia habilidad aleatoria de cualquier figura
+            all_skills = [(fig_key, sk) for fig_key, skills in FIGURE_SKILLS.items()
+                          for sk in skills
+                          if sk["type"] not in ("corruption",)]  # no puede copiarse a sí misma
+            if all_skills:
+                copied_fig_key, copied_skill = random.choice(all_skills)
+                copied_fig_name = FIGURES.get(copied_fig_key, {}).get("name", copied_fig_key)
+                battle.log.append(f"🌑 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+                battle.log.append(f"   ✨ ¡Copia **{copied_skill['name']}** de **{copied_fig_name}**!")
+                # Ejecutar la habilidad copiada (recursión controlada)
+                fake_skill = copied_skill.copy()
+                # Reutilizar la lógica ejecutando inline el tipo copiado
+                cstype = fake_skill["type"]
+                if cstype == "damage":
+                    dmg = battle.calc_damage(attacker["atk"], defender["defense"], fake_skill.get("power", 20))
+                    defender["hp"] = max(0, defender["hp"] - dmg)
+                    battle.log.append(f"   ⚔️ Daño copiado: **{dmg}**!")
+                    if fake_skill.get("aoe"):
+                        def_team_c = battle.p2_team if battle.turn == 1 else battle.p1_team
+                        sec = fake_skill.get("aoe_secondary_power", fake_skill.get("power", 10))
+                        for fig in def_team_c:
+                            if fig is not defender and fig["hp"] > 0:
+                                sd = battle.calc_damage(attacker["atk"], fig["defense"], sec)
+                                fig["hp"] = max(0, fig["hp"] - sd)
+                                battle.log.append(f"   💥 AOE → {fig['emoji']} -{sd}HP")
+                elif cstype == "heal":
+                    if not attacker.get("no_heal"):
+                        heal = max(1, int(fake_skill.get("power", 20) + random.randint(-3, 5)))
+                        attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal)
+                        battle.log.append(f"   💚 Curación copiada: +**{heal}** HP!")
+                elif cstype == "dot":
+                    if "dots" not in defender: defender["dots"] = []
+                    defender["dots"].append({"dmg": fake_skill.get("power", 10), "turns": fake_skill.get("dot_turns", 3)})
+                    battle.log.append(f"   💣 DOT copiado: {fake_skill.get('power',10)} daño/turno x{fake_skill.get('dot_turns',3)}")
+                elif cstype == "team_atk_buff":
+                    buff = fake_skill.get("atk_buff", 10)
+                    for ally in atk_team:
+                        if ally["hp"] > 0:
+                            ally["atk_buff"] = ally.get("atk_buff", 0) + buff
+                    battle.log.append(f"   ⭐ Buff copiado: +{buff} ATK al equipo!")
+                elif cstype == "drain_fill":
+                    f_dmg = fake_skill.get("power", 15)
+                    attacker["hp"] = max(1, attacker["hp"] - f_dmg)
+                    if fake_skill.get("fill_bar"): attacker["energy"] = ENERGY_MAX
+                    e_dmg = fake_skill.get("dmg_enemy", 0)
+                    if e_dmg: defender["hp"] = max(0, defender["hp"] - e_dmg)
+                    battle.log.append(f"   🔴 Drain copiado: -{f_dmg}HP propio, -{e_dmg} al rival!")
+                elif cstype == "glitch_dmg":
+                    raw = random.randint(fake_skill.get("min_dmg",2), fake_skill.get("max_dmg",45))
+                    dmg = max(1, raw - (defender["defense"] // 4))
+                    defender["hp"] = max(0, defender["hp"] - dmg)
+                    battle.log.append(f"   🌀 Glitch copiado: **{dmg}** daño!")
+                elif cstype == "bad_update":
+                    dr = random.choice([4, 6, 8])
+                    hr = dr // 2
+                    def_team_c = battle.p2_team if battle.turn == 1 else battle.p1_team
+                    for fig in def_team_c:
+                        if fig["hp"] > 0: fig["hp"] = max(0, fig["hp"] - dr)
+                    for ally in atk_team:
+                        if ally["hp"] > 0 and not ally.get("no_heal"):
+                            ally["hp"] = min(ally["max_hp"], ally["hp"] + hr)
+                    battle.log.append(f"   🔳 Bad Update copiado: -{dr} a todos los rivales, +{hr} a aliados!")
+                else:
+                    # Para tipos complejos o raros, hace daño básico
+                    dmg = max(1, attacker["atk"] - (defender["defense"] // 4) + random.randint(-2, 5))
+                    defender["hp"] = max(0, defender["hp"] - dmg)
+                    battle.log.append(f"   ⚔️ Efecto copiado (daño base): **{dmg}**!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "fast_kill":
+            # Requiere 3 usos seguidos — al 3ro dispara
+            charges = attacker.get("fast_kill_charges", 0) + 1
+            needed = skill.get("charges_needed", 3)
+            attacker["fast_kill_charges"] = charges
+            if charges >= needed:
+                attacker["fast_kill_charges"] = 0
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                battle.log.append(f"🔪 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → ¡**{dmg}** DAÑO MASIVO!")
+                battle.log.append(f"   _{skill['desc']}_")
+            else:
+                remaining = needed - charges
+                battle.log.append(f"🔪 **{attacker['emoji']} {attacker['name']}** prepara **{skill['name']}**... ({charges}/{needed})")
+                battle.log.append(f"   ¡{remaining} turno(s) más para activar!")
+
+        elif stype == "revive_team":
+            # 1x1x1x1 — se daña a sí mismo y revive figuras aliadas caídas
+            self_dmg = skill["power"]
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
+            revive_hp  = skill.get("revive_hp", 20)
+            revive_atk = skill.get("revive_atk", 10)
+            revive_def = skill.get("revive_def", 15)
+            revived = []
+            for ally in atk_team:
+                if ally["hp"] <= 0 and ally is not attacker:
+                    ally["hp"] = revive_hp
+                    ally["atk"] = revive_atk
+                    ally["defense"] = revive_def
+                    ally["energy"] = 0
+                    if skill.get("revive_poison"):
+                        ally["revive_poisoner"] = True  # envenena al atacar
+                    revived.append(f"{ally['emoji']} {ally['name']}")
+            battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** (-{self_dmg} HP propio)!")
+            if revived:
+                battle.log.append(f"   💀➡️💚 ¡Reviven: {', '.join(revived)}! (HP:{revive_hp} ATK:{revive_atk} DEF:{revive_def})")
+                battle.log.append(f"   ☠️ ¡Las figuras revividas envenenarán al atacar!")
+            else:
+                battle.log.append(f"   No había figuras caídas que revivir.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "heal_team_self":
+            # Shedletsky — Chicken Legs: +30 propio, +25 aliados
+            self_heal = skill["power"]
+            team_heal = skill.get("team_heal_power", 25)
+            if not attacker.get("no_heal"):
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + self_heal)
+            healed = []
+            for ally in atk_team:
+                if ally is not attacker and ally["hp"] > 0 and not ally.get("no_heal"):
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + team_heal)
+                    healed.append(f"{ally['emoji']} {ally['name']} +{team_heal}HP")
+            battle.log.append(f"🍗 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💚 {attacker['name']} +{self_heal}HP | {' | '.join(healed) if healed else 'sin aliados vivos'}")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "switch_sword":
+            # Shedletsky — muestra menú de espadas (se maneja en get_battle_view)
+            # Este tipo no hace nada directamente — la selección se hace via botón especial
+            battle.log.append(f"🐔 **{attacker['emoji']} {attacker['name']}** guarda su espada actual...")
+            battle.log.append(f"   _(Elige tu espada en el menú)_")
+
+        elif stype == "slash":
+            # Shedletsky — ataca con la espada activa y aplica su efecto
+            sword = attacker.get("active_sword", "linked")
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            SWORD_NAMES = {
+                "linked":      "Linked Sword",
+                "firebrand":   "Firebrand 🔥",
+                "venomshank":  "Venomshank ☠️",
+                "windforce":   "Windforce 🌪️",
+                "darkheart":   "Darkheart 🖤",
+                "illumina":    "Illumina ✨",
+                "ghostwalker": "Ghostwalker 👻",
+                "ice_dagger":  "Ice Dagger 🧊",
+            }
+            sword_name = SWORD_NAMES.get(sword, "Linked Sword")
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** con {sword_name} → **{dmg}** daño!")
+
+            # Efectos de espada
+            if sword == "linked":
+                pass  # sin efecto extra
+            elif sword == "firebrand":
+                attacker["fire_immune"] = True
+                # Carga de fuego: daño extra al lanzarse
+                dash_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 20)
+                defender["hp"] = max(0, defender["hp"] - dash_dmg)
+                battle.log.append(f"   🔥 ¡{attacker['name']} se lanza con Firebrand! +{dash_dmg} daño extra!")
+                battle.log.append(f"   🔥 ¡{attacker['name']} es inmune a Ice Dagger!")
+                # Si Shedletsky tiene menos del 30% HP → +30 ATK a aliados
+                hp_pct = attacker["hp"] / attacker["max_hp"]
+                if hp_pct < 0.30:
+                    for ally in atk_team:
+                        if ally is not attacker and ally["hp"] > 0:
+                            ally["atk_buff"] = ally.get("atk_buff", 0) + 30
+                    battle.log.append(f"   🔥 ¡Shedletsky a baja vida! +30 ATK a todos los aliados!")
+            elif sword == "venomshank":
+                if "dots" not in defender: defender["dots"] = []
+                defender["dots"].append({"dmg": 8, "turns": 3})
+                battle.log.append(f"   ☠️ ¡{defender['name']} envenenado! (8 daño/turno x3)")
+            elif sword == "windforce":
+                defender["stunned"] = True
+                battle.log.append(f"   🌪️ ¡{defender['name']} empujado y aturdido 1 turno!")
+            elif sword == "darkheart":
+                lifesteal = max(1, int(dmg * 0.4))
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + lifesteal)
+                battle.log.append(f"   🖤 Robo de vida: +{lifesteal} HP a {attacker['name']}!")
+            elif sword == "illumina":
+                illumina_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 80)
+                defender["hp"] = max(0, defender["hp"] - illumina_dmg)
+                battle.log.append(f"   ✨ ¡Illumina hace daño masivo adicional! -{illumina_dmg} HP!")
+            elif sword == "ghostwalker":
+                kills = attacker.get("ghostwalker_kills", 0)
+                bonus = kills * 5
+                attacker["atk"] = attacker["atk"] + bonus if bonus > 0 else attacker["atk"]
+                battle.log.append(f"   👻 Ghostwalker: +{bonus} ATK acumulado ({kills} kills)")
+            elif sword == "ice_dagger":
+                if not defender.get("fire_immune"):
+                    ice_charges = attacker.get("ice_dagger_charges", 0) + 1
+                    attacker["ice_dagger_charges"] = ice_charges
+                    if ice_charges >= 3:
+                        attacker["ice_dagger_charges"] = 0
+                        ice_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 150)
+                        defender["hp"] = max(0, defender["hp"] - ice_dmg)
+                        battle.log.append(f"   🧊❄️ ¡ICE DAGGER CARGADA! **{ice_dmg}** daño masivo de hielo!")
+                    else:
+                        battle.log.append(f"   🧊 Ice Dagger cargando... ({ice_charges}/3 — mantén la espada equipada!)")
+                else:
+                    attacker["ice_dagger_charges"] = 0
+                    battle.log.append(f"   🧊 Ice Dagger bloqueada por Firebrand!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "consumed_fury":
+            # Mata a la figura activa enemiga + 15 splash + el impostor muere
+            defender["hp"] = 0
+            def_team_fury = battle.p2_team if battle.turn == 1 else battle.p1_team
+            splash = skill.get("splash_dmg", 15)
+            hit = []
+            for fig in def_team_fury:
+                if fig is not defender and fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - splash)
+                    hit.append(f"{fig['emoji']} {fig['name']} -{splash}HP")
+            attacker["hp"] = 0   # el impostor muere también
+            battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💀 **{defender['name']}** es eliminada instantáneamente!")
+            if hit:
+                battle.log.append(f"   💥 Explosión: {' | '.join(hit)}")
+            battle.log.append(f"   💀 **{attacker['name']}** explota y cae también...")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "lobster":
+            # 0.01% de probabilidad de matar a TODAS las figuras del oponente
+            roll = random.randint(1, 10000)
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            if roll == 1:
+                for fig in def_team:
+                    fig["hp"] = 0
+                battle.log.append(f"🦞 **Lobster** usa **LOBSTER**...")
+                battle.log.append(f"   ...")
+                battle.log.append(f"   🦞 **¡LA LANGOSTA LO HA HECHO! ¡TODAS LAS FIGURAS ENEMIGAS ESTÁN MUERTAS!** 🦞")
+            else:
+                battle.log.append(f"🦞 **Lobster** usa **LOBSTER**...")
+                battle.log.append(f"   ...")
+                battle.log.append(f"   No pasa nada. (Como siempre)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "ban_hammer":
+            # Roblox — 50/50: mata al enemigo activo O a un aliado
+            roll = random.randint(1, 2)
+            if roll == 1:
+                defender["hp"] = 0
+                battle.log.append(f"🔨 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+                battle.log.append(f"   💀 ¡**{defender['name']}** fue BANEADO! HP = 0!")
+            else:
+                alive_allies = [f for f in atk_team if f["hp"] > 0 and f is not attacker]
+                if alive_allies:
+                    victim = random.choice(alive_allies)
+                    victim["hp"] = 0
+                    battle.log.append(f"🔨 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**...")
+                    battle.log.append(f"   💀 ¡El martillo se fue de lado y mató a **{victim['name']}** aliado! 😂")
+                else:
+                    # Solo queda Roblox — se auto-daña 40 HP
+                    attacker["hp"] = max(1, attacker["hp"] - 40)
+                    battle.log.append(f"🔨 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**...")
+                    battle.log.append(f"   💥 ¡El martillo rebota contra sí mismo! **-40 HP** a Roblox!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "parry":
+            # Alex — contraataca si el rival ataca en su siguiente turno
+            attacker["parrying"] = True
+            attacker["parry_dmg_pct"] = skill.get("parry_dmg_pct", 25)
+            battle.log.append(f"🛡️ **{attacker['emoji']} {attacker['name']}** se prepara para un **Parry**!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "buff":
+            # Alex — Carga Estelar: potencia el próximo ataque
+            attacker["atk_buff"] = skill.get("atk_buff", 15)
+            battle.log.append(f"⭐ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   Su próximo ataque tendrá +{skill.get('atk_buff',15)} ATK!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "gamble":
+            # AgustoLoco — Fumada: 50/50
+            roll = random.randint(1, 2)
+            if roll == 1:
+                # Buena suerte: HP sube a 150, max temporal
+                new_max = skill.get("gamble_heal", 150)
+                attacker["max_hp"] = max(attacker["max_hp"], new_max)
+                attacker["hp"] = new_max
+                battle.log.append(f"🍀 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → ¡SUERTE! HP sube a {new_max}!")
+            else:
+                # Mala suerte: cae a 1 HP y pierde ATK
+                attacker["hp"] = 1
+                debuff = skill.get("gamble_atk_debuff", 5)
+                attacker["atk"] = max(1, attacker["atk"] - debuff)
+                battle.log.append(f"💀 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → ¡MAL VIAJE! Cae a 1 HP y pierde {debuff} ATK!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "gamble_fire":
+            # AgustoLoco — Mechero: <1% de chance
+            is_immune = defender.get("fire_immune", False)
+            if is_immune:
+                battle.log.append(f"🔥 **{attacker['emoji']} {attacker['name']}** intenta el **{skill['name']}**...")
+                battle.log.append(f"   ❌ ¡El rival es **inmune al fuego**! No pasa nada.")
+            else:
+                chance = skill.get("fire_chance", 1)
+                roll = random.randint(1, 100)
+                if roll <= chance:
+                    fire_dmg = skill.get("fire_dmg", 80)
+                    defender["hp"] = max(0, defender["hp"] - fire_dmg)
+                    battle.log.append(f"🔥🔥🔥 **¡EL MECHERO FUNCIONÓ!** **{attacker['name']}** quema al rival por **{fire_dmg}** daño!")
+                else:
+                    battle.log.append(f"🔥 **{attacker['emoji']} {attacker['name']}** intenta encender el mechero...")
+                    battle.log.append(f"   💨 ...no funciona. (Como siempre)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+    # ¿Cayó el defensor?
+    if defender["hp"] <= 0:
+        # Pasiva de Gamer64: revive una vez con 80% HP
+        if defender.get("passive_revive"):
+            defender["passive_revive"] = False   # ya usó la pasiva
+            revive_hp = max(1, int(defender["max_hp"] * 0.80))
+            defender["hp"] = revive_hp
+            defender["energy"] = 0
+            battle.log.append(f"💫 **{defender['emoji']} {defender['name']}** se cansó de rodeos, ¡se arranca el brazo y entra a su **Fase 2**!")
+            battle.log.append(f"   Se levanta con **{revive_hp} HP** (80% de su vida máxima)!")
+            battle.turn = 2 if battle.turn == 1 else 1
+            await finish_turn(interaction, battle, channel_id)
+            return
+
+        def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+        def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+        current_def_idx = getattr(battle, def_idx_attr)
+        next_idx = battle.next_alive(def_team, current_def_idx)
+
+        if next_idx is not None:
+            setattr(battle, def_idx_attr, next_idx)
+            new_fig = def_team[next_idx]
+            battle.log.append(f"💀 **{defender['name']}** fue derrotado!")
+            battle.log.append(f"🔄 ¡Entra **{new_fig['emoji']} {new_fig['name']}**!")
+            battle.turn = 2 if battle.turn == 1 else 1
+            await finish_turn(interaction, battle, channel_id)
+            return
+        else:
+            await end_battle(interaction, battle, channel_id, winner_turn=battle.turn)
+            return
+
+    # Cambiar turno
+    battle.turn = 2 if battle.turn == 1 else 1
+    await finish_turn(interaction, battle, channel_id)
+
+async def finish_turn(interaction, battle: BattleState, channel_id: int):
+    """Actualiza el embed y, si toca el bot, ejecuta su turno."""
+    if battle.is_bot and battle.turn == 2:
+        embed = battle.get_embed()
+        await interaction.response.edit_message(embed=embed, view=None)
+        await asyncio.sleep(1.2)
+        await bot_turn(interaction, battle, channel_id)
+        return
+
+    view = get_battle_view(battle)
+    embed = battle.get_embed()
+    await interaction.response.edit_message(embed=embed, view=view)
+
+async def bot_turn(interaction, battle: BattleState, channel_id: int):
+    """IA del bot: ataque básico siempre disponible + habilidades cuando hay energía."""
+    f = battle.current_p2()
+    p1_fig = battle.current_p1()
+    battle.log = []
+
+    # Filtrar habilidades disponibles
+    available = [i for i, sk in enumerate(f["skills"]) if f["energy"] >= sk["cost"]]
+
+    # Prioridad: curación si HP < 40%
+    chosen_idx = None
+    hp_ratio = f["hp"] / f["max_hp"]
+    if hp_ratio < 0.4:
+        heal_skills = [i for i in available if f["skills"][i]["type"] in ("heal",)]
+        if heal_skills:
+            chosen_idx = heal_skills[-1]
+
+    # Si hay habilidad disponible y no eligió curar, usarla con 60% de probabilidad
+    if chosen_idx is None and available and random.random() < 0.6:
+        chosen_idx = max(available, key=lambda i: f["skills"][i]["cost"])
+
+    if chosen_idx is not None:
+        # Usar habilidad especial
+        skill = f["skills"][chosen_idx]
+        f["energy"] -= skill["cost"]
+        stype = skill["type"]
+
+        if stype == "damage":
+            dmg = battle.calc_damage(f["atk"], p1_fig["defense"], skill["power"])
+            p1_fig["hp"] = max(0, p1_fig["hp"] - dmg)
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}** → **{dmg}** daño!")
+            if skill.get("stun"):
+                stun_t = skill.get("stun_turns", 1)
+                if stun_t > 1:
+                    p1_fig["stun_turns"] = stun_t
+                else:
+                    p1_fig["stunned"] = True
+                battle.log.append(f"   😵 ¡**{p1_fig['name']}** queda aturdido!")
+            if skill.get("aoe"):
+                sec = skill.get("aoe_secondary_power", skill["power"])
+                for fig in battle.p1_team:
+                    if fig is not p1_fig and fig["hp"] > 0:
+                        sd = battle.calc_damage(f["atk"], fig["defense"], sec)
+                        fig["hp"] = max(0, fig["hp"] - sd)
+                        battle.log.append(f"   💥 AOE → {fig['emoji']} {fig['name']} -{sd}HP")
+            if skill.get("force_switch"):
+                turns = skill.get("force_switch_turns", 3)
+                p1_fig["force_locked"] = turns
+                next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
+                if next_idx:
+                    battle.p1_active = next_idx
+                    battle.log.append(f"   🔒 **{p1_fig['name']}** bloqueada {turns} turnos!")
+
+        elif stype == "heal":
+            heal = max(1, int(skill["power"] + random.randint(-3, 5)))
+            if not f.get("no_heal"):
+                f["hp"] = min(f["max_hp"], f["hp"] + heal)
+                battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}** → +**{heal}** HP!")
+            if skill.get("team_heal"):
+                th = skill.get("team_heal_power", 10)
+                for ally in battle.p2_team:
+                    if ally is not f and ally["hp"] > 0:
+                        ally["hp"] = min(ally["max_hp"], ally["hp"] + th)
+
+        elif stype == "drain":
+            f["hp"] = max(1, f["hp"] - skill["power"])
+            bonus = skill.get("bar_bonus", 20)
+            f["energy"] = min(ENERGY_MAX, f["energy"] + bonus)
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}**! (+{bonus}⚡)")
+
+        elif stype == "drain_fill":
+            f["hp"] = max(1, f["hp"] - skill["power"])
+            if skill.get("fill_bar"): f["energy"] = ENERGY_MAX
+            if skill.get("no_heal"): f["no_heal"] = True
+            ed = skill.get("dmg_enemy", 0)
+            if ed > 0:
+                p1_fig["hp"] = max(0, p1_fig["hp"] - ed)
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}**! (-{skill['power']}HP propio, -{ed} al rival)")
+
+        elif stype == "dot":
+            if "dots" not in p1_fig: p1_fig["dots"] = []
+            p1_fig["dots"].append({"dmg": skill["power"], "turns": skill.get("dot_turns", 3)})
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}**! ({skill['power']} daño/turno x{skill.get('dot_turns',3)})")
+
+        elif stype == "team_atk_buff":
+            buff = skill.get("atk_buff", 15)
+            for ally in battle.p2_team:
+                if ally["hp"] > 0:
+                    ally["atk_buff"] = ally.get("atk_buff", 0) + buff
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}**! (Todo el equipo +{buff} ATK)")
+
+        elif stype == "bad_update":
+            dmg_roll = random.choice([4, 6, 8])
+            heal_roll = dmg_roll // 2
+            for fig in battle.p1_team:
+                if fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - dmg_roll)
+            for ally in battle.p2_team:
+                if ally["hp"] > 0 and not ally.get("no_heal"):
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + heal_roll)
+            battle.log.append(f"🤖 **{f['emoji']} {f['name']}** usa **{skill['name']}**! ({dmg_roll} a todos los rivales, +{heal_roll} a aliados)")
+
+        elif stype == "fast_kill":
+            # Requiere 3 usos seguidos — al 3ro dispara
+            charges = attacker.get("fast_kill_charges", 0) + 1
+            needed = skill.get("charges_needed", 3)
+            attacker["fast_kill_charges"] = charges
+            if charges >= needed:
+                attacker["fast_kill_charges"] = 0
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                battle.log.append(f"🔪 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → ¡**{dmg}** DAÑO MASIVO!")
+                battle.log.append(f"   _{skill['desc']}_")
+            else:
+                remaining = needed - charges
+                battle.log.append(f"🔪 **{attacker['emoji']} {attacker['name']}** prepara **{skill['name']}**... ({charges}/{needed})")
+                battle.log.append(f"   ¡{remaining} turno(s) más para activar!")
+
+        elif stype == "revive_team":
+            # 1x1x1x1 — se daña a sí mismo y revive figuras aliadas caídas
+            self_dmg = skill["power"]
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
+            revive_hp  = skill.get("revive_hp", 20)
+            revive_atk = skill.get("revive_atk", 10)
+            revive_def = skill.get("revive_def", 15)
+            revived = []
+            for ally in atk_team:
+                if ally["hp"] <= 0 and ally is not attacker:
+                    ally["hp"] = revive_hp
+                    ally["atk"] = revive_atk
+                    ally["defense"] = revive_def
+                    ally["energy"] = 0
+                    if skill.get("revive_poison"):
+                        ally["revive_poisoner"] = True  # envenena al atacar
+                    revived.append(f"{ally['emoji']} {ally['name']}")
+            battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** (-{self_dmg} HP propio)!")
+            if revived:
+                battle.log.append(f"   💀➡️💚 ¡Reviven: {', '.join(revived)}! (HP:{revive_hp} ATK:{revive_atk} DEF:{revive_def})")
+                battle.log.append(f"   ☠️ ¡Las figuras revividas envenenarán al atacar!")
+            else:
+                battle.log.append(f"   No había figuras caídas que revivir.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "heal_team_self":
+            # Shedletsky — Chicken Legs: +30 propio, +25 aliados
+            self_heal = skill["power"]
+            team_heal = skill.get("team_heal_power", 25)
+            if not attacker.get("no_heal"):
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + self_heal)
+            healed = []
+            for ally in atk_team:
+                if ally is not attacker and ally["hp"] > 0 and not ally.get("no_heal"):
+                    ally["hp"] = min(ally["max_hp"], ally["hp"] + team_heal)
+                    healed.append(f"{ally['emoji']} {ally['name']} +{team_heal}HP")
+            battle.log.append(f"🍗 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💚 {attacker['name']} +{self_heal}HP | {' | '.join(healed) if healed else 'sin aliados vivos'}")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "switch_sword":
+            # Shedletsky — muestra menú de espadas (se maneja en get_battle_view)
+            # Este tipo no hace nada directamente — la selección se hace via botón especial
+            battle.log.append(f"🐔 **{attacker['emoji']} {attacker['name']}** guarda su espada actual...")
+            battle.log.append(f"   _(Elige tu espada en el menú)_")
+
+        elif stype == "slash":
+            # Shedletsky — ataca con la espada activa y aplica su efecto
+            sword = attacker.get("active_sword", "linked")
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            SWORD_NAMES = {
+                "linked":      "Linked Sword",
+                "firebrand":   "Firebrand 🔥",
+                "venomshank":  "Venomshank ☠️",
+                "windforce":   "Windforce 🌪️",
+                "darkheart":   "Darkheart 🖤",
+                "illumina":    "Illumina ✨",
+                "ghostwalker": "Ghostwalker 👻",
+                "ice_dagger":  "Ice Dagger 🧊",
+            }
+            sword_name = SWORD_NAMES.get(sword, "Linked Sword")
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** con {sword_name} → **{dmg}** daño!")
+
+            # Efectos de espada
+            if sword == "linked":
+                pass  # sin efecto extra
+            elif sword == "firebrand":
+                attacker["fire_immune"] = True
+                # Carga de fuego: daño extra al lanzarse
+                dash_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 20)
+                defender["hp"] = max(0, defender["hp"] - dash_dmg)
+                battle.log.append(f"   🔥 ¡{attacker['name']} se lanza con Firebrand! +{dash_dmg} daño extra!")
+                battle.log.append(f"   🔥 ¡{attacker['name']} es inmune a Ice Dagger!")
+                # Si Shedletsky tiene menos del 30% HP → +30 ATK a aliados
+                hp_pct = attacker["hp"] / attacker["max_hp"]
+                if hp_pct < 0.30:
+                    for ally in atk_team:
+                        if ally is not attacker and ally["hp"] > 0:
+                            ally["atk_buff"] = ally.get("atk_buff", 0) + 30
+                    battle.log.append(f"   🔥 ¡Shedletsky a baja vida! +30 ATK a todos los aliados!")
+            elif sword == "venomshank":
+                if "dots" not in defender: defender["dots"] = []
+                defender["dots"].append({"dmg": 8, "turns": 3})
+                battle.log.append(f"   ☠️ ¡{defender['name']} envenenado! (8 daño/turno x3)")
+            elif sword == "windforce":
+                defender["stunned"] = True
+                battle.log.append(f"   🌪️ ¡{defender['name']} empujado y aturdido 1 turno!")
+            elif sword == "darkheart":
+                lifesteal = max(1, int(dmg * 0.4))
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + lifesteal)
+                battle.log.append(f"   🖤 Robo de vida: +{lifesteal} HP a {attacker['name']}!")
+            elif sword == "illumina":
+                illumina_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 80)
+                defender["hp"] = max(0, defender["hp"] - illumina_dmg)
+                battle.log.append(f"   ✨ ¡Illumina hace daño masivo adicional! -{illumina_dmg} HP!")
+            elif sword == "ghostwalker":
+                kills = attacker.get("ghostwalker_kills", 0)
+                bonus = kills * 5
+                attacker["atk"] = attacker["atk"] + bonus if bonus > 0 else attacker["atk"]
+                battle.log.append(f"   👻 Ghostwalker: +{bonus} ATK acumulado ({kills} kills)")
+            elif sword == "ice_dagger":
+                if not defender.get("fire_immune"):
+                    ice_charges = attacker.get("ice_dagger_charges", 0) + 1
+                    attacker["ice_dagger_charges"] = ice_charges
+                    if ice_charges >= 3:
+                        attacker["ice_dagger_charges"] = 0
+                        ice_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 150)
+                        defender["hp"] = max(0, defender["hp"] - ice_dmg)
+                        battle.log.append(f"   🧊❄️ ¡ICE DAGGER CARGADA! **{ice_dmg}** daño masivo de hielo!")
+                    else:
+                        battle.log.append(f"   🧊 Ice Dagger cargando... ({ice_charges}/3 — mantén la espada equipada!)")
+                else:
+                    attacker["ice_dagger_charges"] = 0
+                    battle.log.append(f"   🧊 Ice Dagger bloqueada por Firebrand!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "consumed_fury":
+            # Mata a la figura activa enemiga + 15 splash + el impostor muere
+            defender["hp"] = 0
+            def_team_fury = battle.p2_team if battle.turn == 1 else battle.p1_team
+            splash = skill.get("splash_dmg", 15)
+            hit = []
+            for fig in def_team_fury:
+                if fig is not defender and fig["hp"] > 0:
+                    fig["hp"] = max(0, fig["hp"] - splash)
+                    hit.append(f"{fig['emoji']} {fig['name']} -{splash}HP")
+            attacker["hp"] = 0   # el impostor muere también
+            battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💀 **{defender['name']}** es eliminada instantáneamente!")
+            if hit:
+                battle.log.append(f"   💥 Explosión: {' | '.join(hit)}")
+            battle.log.append(f"   💀 **{attacker['name']}** explota y cae también...")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "lobster":
+            # 0.01% de probabilidad de matar a TODAS las figuras del oponente
+            roll = random.randint(1, 10000)
+            def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+            if roll == 1:
+                for fig in def_team:
+                    fig["hp"] = 0
+                battle.log.append(f"🦞 **Lobster** usa **LOBSTER**...")
+                battle.log.append(f"   ...")
+                battle.log.append(f"   🦞 **¡LA LANGOSTA LO HA HECHO! ¡TODAS LAS FIGURAS ENEMIGAS ESTÁN MUERTAS!** 🦞")
+            else:
+                battle.log.append(f"🦞 **Lobster** usa **LOBSTER**...")
+                battle.log.append(f"   ...")
+                battle.log.append(f"   No pasa nada. (Como siempre)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "ban_hammer":
+            if random.randint(1,2) == 1:
+                p1_fig["hp"] = 0
+                battle.log.append(f"🤖🔨 **¡BAN HAMMER!** **{p1_fig['name']}** eliminada!")
+            else:
+                alive = [fig for fig in battle.p2_team if fig["hp"] > 0 and fig is not f]
+                if alive:
+                    v = random.choice(alive)
+                    v["hp"] = 0
+                    battle.log.append(f"🤖🔨 Ban Hammer sale mal... ¡mata a **{v['name']}** aliada! 😂")
+
+        elif stype in ("parry", "buff", "gamble", "gamble_fire"):
+            # Para estos tipos el bot simplemente ataca normal
+            chosen_idx = None
+
+    if chosen_idx is None:
+        # Ataque básico — siempre disponible, gana 20 energía
+        f["energy"] = min(ENERGY_MAX, f["energy"] + ENERGY_PER_TURN)
+        bonus_atk = f.pop("atk_buff", 0)
+        max_power = max((sk.get("power", 0) for sk in f["skills"]), default=20)
+        base_dmg = max(1, round(max_power / 2))
+        dmg = max(1, base_dmg + (bonus_atk // 2) + random.randint(-2, 3) - (p1_fig["defense"] // 6))
+        p1_fig["hp"] = max(0, p1_fig["hp"] - dmg)
+        buff_txt = f" (+{bonus_atk} ATK)" if bonus_atk else ""
+        battle.log.append(f"🤖 **{f['emoji']} {f['name']}** ataca básico{buff_txt} → **{dmg}** daño! (+20⚡)")
+        if p1_fig.get("retributing"):
+            retrib_dmg = max(1, dmg // 2)
+            f["hp"] = max(0, f["hp"] - retrib_dmg)
+            p1_fig["retrib_turns"] = p1_fig.get("retrib_turns", 1) - 1
+            if p1_fig["retrib_turns"] <= 0:
+                p1_fig["retributing"] = False
+            battle.log.append(f"   🦷 **{p1_fig['name']}** devuelve **{retrib_dmg}** daño (¡Retribución!)!")
+        if p1_fig.get("parrying"):
+            p1_fig["parrying"] = False
+            pct = p1_fig.get("parry_dmg_pct", 25)
+            cdmg = int(p1_fig["max_hp"] * pct / 100)
+            f["hp"] = max(0, f["hp"] - cdmg)
+            battle.log.append(f"   ⚡ **{p1_fig['name']}** hace COUNTER y devuelve **{cdmg}** daño!")
+
+    # ¿Cayó alguna figura del jugador?
+    if p1_fig["hp"] <= 0:
+        # Pasiva de Gamer64: revive una vez con 80% HP
+        if p1_fig.get("passive_revive"):
+            p1_fig["passive_revive"] = False
+            revive_hp = max(1, int(p1_fig["max_hp"] * 0.80))
+            p1_fig["hp"] = revive_hp
+            p1_fig["energy"] = 0
+            battle.log.append(f"💫 **{p1_fig['emoji']} {p1_fig['name']}** se cansó de rodeos, ¡se arranca el brazo y entra a su **Fase 2**!")
+            battle.log.append(f"   Se levanta con **{revive_hp} HP** (80% de su vida máxima)!")
+        else:
+            next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
+            if next_idx is not None:
+                battle.p1_active = next_idx
+                new_fig = battle.p1_team[next_idx]
+                battle.log.append(f"💀 **{p1_fig['name']}** fue derrotado!")
+                battle.log.append(f"🔄 ¡Entra **{new_fig['emoji']} {new_fig['name']}**!")
+            else:
+                await end_battle(interaction, battle, channel_id, winner_turn=2)
+                return
+
+    if battle.current_p1()["hp"] <= 0:
+        next_idx = battle.next_alive(battle.p1_team, battle.p1_active)
+        if next_idx is None:
+            await end_battle(interaction, battle, channel_id, winner_turn=2)
+            return
+
+    battle.turn = 1
+    view = get_battle_view(battle)
+    await interaction.message.edit(embed=battle.get_embed(), view=view)
+
+async def end_battle(interaction, battle: BattleState, channel_id: int, winner_turn: int):
+    """Cierra la batalla y da recompensas."""
+    p1_won = (winner_turn == 1)
+    winner_id = battle.p1 if p1_won else battle.p2
+    loser_id  = battle.p2 if p1_won else battle.p1
+
+    # Asegurarse de que los HP queden en 0
+    for f in battle.p1_team + battle.p2_team:
+        f["hp"] = max(0, f["hp"])
+
+    embed = battle.get_embed(title="🏆 ¡FIN DE LA BATALLA!")
+
+    if p1_won:
+        win_text = f"🎉 ¡<@{winner_id}> ganó con su equipo!"
+    else:
+        win_text = f"🤖 ¡El BOT ganó!" if battle.is_bot else f"🎉 ¡<@{winner_id}> ganó con su equipo!"
+    embed.add_field(name="🏆 GANADOR", value=win_text, inline=False)
+
+    db = load_db()
+    # Recompensas al ganador
+    if p1_won or not battle.is_bot:
+        winner_data = get_user(db, winner_id)
+        if winner_data:
+            winner_data["wins"] = winner_data.get("wins", 0) + 1
+            winner_data["coins"] = winner_data.get("coins", 0) + COINS_WIN
+            winner_data["xp"] = winner_data.get("xp", 0) + XP_PER_WIN
+            while winner_data["xp"] >= xp_to_level_up(winner_data["level"]):
+                winner_data["xp"] -= xp_to_level_up(winner_data["level"])
+                winner_data["level"] += 1
+            # XP a las figuras del equipo ganador
+            team_keys = battle.p1_team_keys if p1_won else battle.p2_team_keys
+            for fig_data in winner_data["figures"]:
+                if fig_data["key"] in team_keys:
+                    fig_data["xp"] = fig_data.get("xp", 0) + XP_PER_WIN // 3
+                    while fig_data["xp"] >= xp_to_level_up(fig_data.get("level", 1)):
+                        fig_data["xp"] -= xp_to_level_up(fig_data.get("level", 1))
+                        fig_data["level"] = fig_data.get("level", 1) + 1
+
+    # Recompensas al perdedor
+    if not battle.is_bot or not p1_won:
+        loser_data = get_user(db, loser_id)
+        if loser_data:
+            loser_data["losses"] = loser_data.get("losses", 0) + 1
+            loser_data["coins"] = loser_data.get("coins", 0) + COINS_LOSS
+    elif battle.is_bot and not p1_won:
+        p1_data = get_user(db, battle.p1)
+        if p1_data:
+            p1_data["losses"] = p1_data.get("losses", 0) + 1
+            p1_data["coins"] = p1_data.get("coins", 0) + COINS_LOSS
+
+    save_db(db)
+    embed.add_field(name="💰 Recompensas", value=f"Ganador: +{COINS_WIN}🪙 +{XP_PER_WIN}XP | Perdedor: +{COINS_LOSS}🪙", inline=False)
+
+    if channel_id in active_battles:
+        del active_battles[channel_id]
+
+    try:
+        await interaction.response.edit_message(embed=embed, view=None)
+    except Exception:
+        await interaction.message.edit(embed=embed, view=None)
+
+# ============================================================
+#  COMANDOS
+# ============================================================
+
+GUILD_ID = 1236294131534401647  # ← PON AQUÍ EL ID DE TU SERVIDOR (clic derecho al servidor > Copiar ID)
+
+@bot.event
+async def on_ready():
+    print(f"✅ {bot.user} está en línea!")
+    await bot.tree.sync()
+    if GUILD_ID:
+        guild = discord.Object(id=GUILD_ID)
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"✅ {len(synced)} comandos sincronizados en el servidor!")
+    else:
+        print("⚠️ Pon tu GUILD_ID para sync instantáneo")
+
+# --- REGISTRO ---
+@bot.tree.command(name="registrar", description="Regístrate en el Androide del PvP y obtén 1000 monedas!")
+async def registrar(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if user:
+        await interaction.response.send_message(
+            f"⚠️ Ya estás registrado como **{user['name']}** con **{user['coins']}** monedas!",
+            ephemeral=True
+        )
+        return
+
+    modal = discord.ui.Modal(title="¡Bienvenido al Androide del PvP!")
+
+    name_input = discord.ui.TextInput(
+        label="¿Cómo quieres que te conozca el bot?",
+        placeholder="Ej: El Destructor, MegaGamer, etc.",
+        max_length=32
+    )
+    modal.add_item(name_input)
+
+    async def on_submit(modal_interaction: discord.Interaction):
+        display_name = name_input.value.strip()
+        create_user(db, modal_interaction.user.id, display_name)
+        embed = discord.Embed(
+            title="🎉 ¡Registro exitoso!",
+            description=f"¡Bienvenido, **{display_name}**!\nEres conocido en la arena como el gran **{display_name}**.",
+            color=0x2ecc71
+        )
+        embed.add_field(name="💰 Monedas iniciales", value="1,000 monedas", inline=True)
+        embed.add_field(name="🎮 Siguiente paso", value="Usa `/tienda` para comprar tu primera figura!", inline=True)
+        embed.set_footer(text="¡Que comience la batalla!")
+        await modal_interaction.response.send_message(embed=embed)
+
+    modal.on_submit = on_submit
+    await interaction.response.send_modal(modal)
+
+# --- PERFIL ---
+@bot.tree.command(name="perfil", description="Mira tu perfil y tus estadísticas")
+async def perfil(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ No estás registrado. Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title=f"👤 Perfil de {user['name']}",
+        color=0x3498db
+    )
+    embed.set_thumbnail(url=interaction.user.display_avatar.url)
+    embed.add_field(name="💰 Monedas", value=f"{user['coins']:,}", inline=True)
+    embed.add_field(name="🏆 Nivel", value=user.get("level", 1), inline=True)
+    embed.add_field(name="⚡ XP", value=f"{user.get('xp',0)}/{xp_to_level_up(user.get('level',1))}", inline=True)
+    embed.add_field(name="✅ Victorias", value=user.get("wins", 0), inline=True)
+    embed.add_field(name="❌ Derrotas", value=user.get("losses", 0), inline=True)
+    embed.add_field(name="🎭 Figuras", value=len(user.get("figures", [])), inline=True)
+
+    active = user.get("active_figure")
+    if active:
+        fig = FIGURES.get(active)
+        if fig:
+            embed.add_field(name="🌟 Figura activa", value=f"{fig['emoji']} {fig['name']}", inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+# --- TIENDA ---
+@bot.tree.command(name="tienda", description="Compra figuras para tu colección")
+async def tienda(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Excluir figuras con price=0 (exclusivas de jefes) y roblox_boss
+    available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+
+    if not available:
+        await interaction.response.send_message("🎉 ¡Ya tienes todas las figuras!", ephemeral=True)
+        return
+
+    # Mostrar página 0
+    await show_shop_page(interaction, available, user, 0, db)
+
+async def show_shop_page(interaction, available, user, page, db):
+    items = list(available.items())
+    per_page = 4
+    total_pages = (len(items) + per_page - 1) // per_page
+    start = page * per_page
+    end = start + per_page
+    page_items = items[start:end]
+
+    embed = discord.Embed(
+        title="🏪 Tienda de Figuras",
+        description=f"💰 Tus monedas: **{user['coins']:,}** | Página {page+1}/{total_pages}",
+        color=0xf39c12
+    )
+
+    for key, fig in page_items:
+        star = RARITY_STARS[fig["rarity"]]
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']} {star}",
+            value=(
+                f"💎 {fig['rarity'].upper()} | 💰 {fig['price']} monedas\n"
+                f"❤️ HP:{fig['hp']} ⚔️ ATK:{fig['attack']} 🛡️ DEF:{fig['defense']} ⚡ VEL:{fig['speed']}\n" +
+                " | ".join(f"✨{sk['name']}" for sk in FIGURE_SKILLS.get(key, []))
+            ),
+            inline=False
+        )
+
+    view = ShopView(available, user, page, total_pages, page_items, db)
+
+    if hasattr(interaction, 'response') and not interaction.response.is_done():
+        await interaction.response.send_message(embed=embed, view=view)
+    else:
+        await interaction.edit_original_response(embed=embed, view=view)
+
+class ShopView(discord.ui.View):
+    def __init__(self, available, user, page, total_pages, page_items, db):
+        super().__init__(timeout=60)
+        self.available = available
+        self.user = user
+        self.page = page
+        self.total_pages = total_pages
+        self.page_items = page_items
+        self.db = db
+
+        # Botones de compra
+        for key, fig in page_items:
+            btn = discord.ui.Button(
+                label=f"Comprar {fig['name']} ({fig['price']}🪙)",
+                style=discord.ButtonStyle.success,
+                custom_id=f"buy_{key}",
+                disabled=user["coins"] < fig["price"]
+            )
+            btn.callback = self.make_buy_callback(key, fig)
+            self.add_item(btn)
+
+        # Navegación
+        if page > 0:
+            prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary, custom_id="prev")
+            prev_btn.callback = self.prev_page
+            self.add_item(prev_btn)
+
+        if page < total_pages - 1:
+            next_btn = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary, custom_id="next")
+            next_btn.callback = self.next_page
+            self.add_item(next_btn)
+
+    def make_buy_callback(self, key, fig):
+        async def callback(interaction: discord.Interaction):
+            db = load_db()
+            user = get_user(db, interaction.user.id)
+            if not user:
+                await interaction.response.send_message("❌ No registrado.", ephemeral=True)
+                return
+            if user["coins"] < fig["price"]:
+                await interaction.response.send_message("❌ No tienes suficientes monedas.", ephemeral=True)
+                return
+            user["coins"] -= fig["price"]
+            user["figures"].append({"key": key, "level": 1, "xp": 0})
+            # Si el equipo tiene huecos, llenarlos automáticamente
+            team = user.get("team", [None, None, None])
+            for i in range(3):
+                if i >= len(team): team.append(None)
+                if team[i] is None:
+                    team[i] = len(user["figures"]) - 1  # índice en figures
+                    break
+            user["team"] = team
+            save_db(db)
+
+            embed = discord.Embed(
+                title="✅ ¡Figura comprada!",
+                description=f"¡Obtuviste a **{fig['emoji']} {fig['name']}**!",
+                color=RARITY_COLOR[fig["rarity"]]
+            )
+            embed.add_field(name="💰 Monedas restantes", value=f"{user['coins']:,}", inline=True)
+            embed.add_field(name="💡 Tip", value="Usa `/misfiguras` para ver tu colección y `/equipar` para armar tu equipo de 3.", inline=False)
+            if fig.get("image"):
+                embed.set_image(url=fig["image"])
+
+            await interaction.response.edit_message(embed=embed, view=None)
+        return callback
+
+    async def prev_page(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await show_shop_page(interaction, self.available, self.user, self.page - 1, self.db)
+
+    async def next_page(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        await show_shop_page(interaction, self.available, self.user, self.page + 1, self.db)
+
+# --- MIS FIGURAS ---
+@bot.tree.command(name="misfiguras", description="Ver tu colección de figuras")
+async def misfiguras(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    figs = user.get("figures", [])
+    if not figs:
+        await interaction.response.send_message("📭 No tienes figuras. Usa `/tienda` para comprar.", ephemeral=True)
+        return
+
+    await show_figure_menu(interaction, user, figs, page=0)
+
+def get_unique_figs(figs):
+    """Devuelve lista de figuras únicas (sin duplicados) con conteo de copias.
+    Cada entrada: (key, fig_data_mejor_nivel, count)
+    Ordenadas según aparecen por primera vez en la colección."""
+    seen = {}   # key -> {"data": fig_data, "count": n, "order": i}
+    for i, fd in enumerate(figs):
+        k = fd["key"]
+        if k not in seen:
+            seen[k] = {"data": fd, "count": 1, "order": i}
+        else:
+            seen[k]["count"] += 1
+            # Guardar la copia de mayor nivel
+            if fd.get("level", 1) > seen[k]["data"].get("level", 1):
+                seen[k]["data"] = fd
+    # Ordenar por orden de primera aparición
+    ordered = sorted(seen.values(), key=lambda x: x["order"])
+    return [(v["data"]["key"], v["data"], v["count"]) for v in ordered]
+
+def build_figure_embed(user, unique_figs, page):
+    key, fig_data, count = unique_figs[page]
+    fig = FIGURES.get(key, {})
+    lvl = fig_data.get("level", 1)
+    xp  = fig_data.get("xp", 0)
+    team = user.get("team", [None, None, None])
+    all_figs = user.get("figures", [])
+    pos_names = ["🥇 Frontal", "🥈 Centro", "🥉 Trasero"]
+    rarity = fig.get("rarity", "común")
+    star  = RARITY_STARS.get(rarity, "⚪")
+    color = RARITY_COLOR.get(rarity, 0x95a5a6)
+
+    # ¿Está en el equipo?
+    in_team = ""
+    for t_pos, t_idx in enumerate(team):
+        if t_idx is not None and t_idx < len(all_figs) and all_figs[t_idx]["key"] == key:
+            in_team += f" **[{pos_names[t_pos]}]**"
+
+    # Título con contador de copias
+    copies_txt = f" ×{count}" if count > 1 else ""
+    embed = discord.Embed(
+        title=f"{fig.get('emoji','')} {fig.get('name', key)}{copies_txt} {star}{in_team}",
+        description=f"Rareza: **{rarity.upper()}** | Precio: **{fig.get('price',0):,}🪙**",
+        color=color
+    )
+
+    # Copias
+    if count > 1:
+        embed.add_field(name="📦 Copias", value=f"Tienes **{count}** de esta figura", inline=False)
+
+    embed.add_field(
+        name="📊 Stats",
+        value=(
+            f"❤️ **Vida:** {apply_level_bonus(fig.get('hp',0), lvl)}\n"
+            f"⚔️ **Ataque:** {apply_level_bonus(fig.get('attack',0), lvl)}\n"
+            f"🛡️ **Defensa:** {apply_level_bonus(fig.get('defense',0), lvl)}\n"
+            f"⚡ **Velocidad:** {fig.get('speed',0)}"
+        ),
+        inline=True
+    )
+    embed.add_field(
+        name="🏅 Progreso",
+        value=(f"Nivel: **{lvl}**\nXP: **{xp}/{xp_to_level_up(lvl)}**"),
+        inline=True
+    )
+
+    # Equipo
+    team_str = ""
+    for i, idx in enumerate(team):
+        if idx is not None and idx < len(all_figs):
+            fd = all_figs[idx]
+            fg = FIGURES.get(fd["key"])
+            name  = fg.get("name", fd["key"]) if fg else fd["key"]
+            emoji = fg.get("emoji", "") if fg else ""
+            team_str += f"{pos_names[i]}: {emoji} {name}\n"
+        else:
+            team_str += f"{pos_names[i]}: _(vacío)_\n"
+    embed.add_field(name="⚔️ Tu equipo", value=team_str, inline=False)
+
+    # Habilidades
+    skills = FIGURE_SKILLS.get(key, [])
+    type_emoji = {
+        "damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️",
+        "buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐","dot":"💣",
+        "bad_update":"🔳","ban_hammer":"🔨","fly_away":"✈️","michi_counter":"🦊",
+        "glitch_dmg":"🌀","corruption":"🌑","retribution":"🦷","fast_kill":"🔪",
+        "consumed_fury":"💥","revive_team":"💀","heal_team_self":"🍗",
+        "switch_sword":"🗡️","slash":"⚔️","lobster":"🦞",
+    }
+    bar_labels = {30:"🟡[30⚡]", 60:"🟠[60⚡]", 100:"🔴[100⚡]"}
+    skill_str = ""
+    for sk in skills:
+        te = type_emoji.get(sk["type"], "⚡")
+        bl = bar_labels.get(sk["cost"], f"[{sk['cost']}⚡]")
+        skill_str += f"{bl} {te} **{sk['name']}**\n_{sk['desc']}_\n\n"
+    if skill_str:
+        embed.add_field(name="✨ Habilidades", value=skill_str.strip(), inline=False)
+
+    if fig.get("image"):
+        embed.set_image(url=fig["image"])
+
+    embed.set_footer(text=f"Figura {page+1} de {len(unique_figs)}  •  Colección única")
+    return embed
+
+def make_fig_view_sync(orig_user_id, user, unique_figs, page):
+    view = discord.ui.View(timeout=120)
+    total = len(unique_figs)
+
+    prev_btn = discord.ui.Button(label="◀ Anterior", style=discord.ButtonStyle.secondary,
+                                  disabled=page==0, custom_id="fig_prev", row=0)
+    counter_btn = discord.ui.Button(label=f"{page+1} / {total}", style=discord.ButtonStyle.primary,
+                                     disabled=True, custom_id="fig_counter", row=0)
+    next_btn = discord.ui.Button(label="Siguiente ▶", style=discord.ButtonStyle.secondary,
+                                  disabled=page==total-1, custom_id="fig_next", row=0)
+
+    def make_nav(new_page):
+        async def callback(inter: discord.Interaction):
+            if inter.user.id != orig_user_id:
+                await inter.response.send_message("❌ Este menú no es tuyo.", ephemeral=True)
+                return
+            db2 = load_db()
+            u2 = get_user(db2, inter.user.id)
+            uf2 = get_unique_figs(u2.get("figures", []))
+            embed2 = build_figure_embed(u2, uf2, new_page)
+            view2  = make_fig_view_sync(orig_user_id, u2, uf2, new_page)
+            await inter.response.edit_message(embed=embed2, view=view2)
+        return callback
+
+    prev_btn.callback = make_nav(page - 1)
+    next_btn.callback = make_nav(page + 1)
+    view.add_item(prev_btn)
+    view.add_item(counter_btn)
+    view.add_item(next_btn)
+    return view
+
+async def show_figure_menu(interaction, user, figs, page: int):
+    unique_figs = get_unique_figs(figs)
+    if not unique_figs:
+        await interaction.response.send_message("📭 No tienes figuras.", ephemeral=True)
+        return
+    page = min(page, len(unique_figs) - 1)
+    embed = build_figure_embed(user, unique_figs, page)
+    view  = make_fig_view_sync(interaction.user.id, user, unique_figs, page)
+    if hasattr(interaction, 'response') and not interaction.response.is_done():
+        await interaction.response.send_message(embed=embed, view=view)
+    else:
+        await interaction.edit_original_response(embed=embed, view=view)
+
+# --- EQUIPAR ---
+@bot.tree.command(name="equipar", description="Arma tu equipo de 3 figuras (frontal, centro, trasero)")
+async def equipar(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user or not user.get("figures"):
+        await interaction.response.send_message("❌ No tienes figuras. Compra en `/tienda`.", ephemeral=True)
+        return
+
+    await show_equip_menu(interaction, user, step=0)
+
+async def show_equip_menu(interaction, user, step: int):
+    pos_names = ["🥇 Frontal", "🥈 Centro", "🥉 Trasero"]
+    pos_desc  = ["primera en entrar al combate", "entra si la frontal cae", "la última en combatir"]
+    figs = user.get("figures", [])
+
+    options = []
+    for i, fig_data in enumerate(figs):
+        fig = FIGURES.get(fig_data["key"])
+        if fig:
+            lvl = fig_data.get("level", 1)
+            options.append(discord.SelectOption(
+                label=f"#{i+1} {fig['name']} (Nv.{lvl})",
+                value=str(i),
+                emoji=fig["emoji"],
+                description=f"{fig['rarity'].upper()} | ATK:{apply_level_bonus(fig['attack'],lvl)} HP:{apply_level_bonus(fig['hp'],lvl)}"
+            ))
+
+    select = discord.ui.Select(
+        placeholder=f"Elige tu figura {pos_names[step]}...",
+        options=options,
+        custom_id=f"equip_step_{step}"
+    )
+
+    async def select_callback(inter: discord.Interaction):
+        chosen_idx = int(select.values[0])
+        db2 = load_db()
+        usr2 = get_user(db2, inter.user.id)
+        team = usr2.get("team", [None, None, None])
+        while len(team) < 3: team.append(None)
+        team[step] = chosen_idx
+        usr2["team"] = team
+        save_db(db2)
+
+        fig_data = usr2["figures"][chosen_idx]
+        fig = FIGURES[fig_data["key"]]
+
+        if step < 2:
+            # Continuar al siguiente paso
+            await inter.response.edit_message(
+                content=f"✅ {pos_names[step]}: **{fig['emoji']} {fig['name']}** — Ahora elige la {pos_names[step+1]}",
+                view=None
+            )
+            await show_equip_menu(inter, usr2, step + 1)
+        else:
+            # Equipo completo
+            team_final = usr2["team"]
+            resumen = []
+            for i, idx in enumerate(team_final):
+                if idx is not None and idx < len(usr2["figures"]):
+                    fd = usr2["figures"][idx]
+                    fg = FIGURES.get(fd["key"])
+                    if fg:
+                        resumen.append(f"{pos_names[i]}: {fg['emoji']} **{fg['name']}**")
+            embed = discord.Embed(
+                title="✅ ¡Equipo armado!",
+                description="\n".join(resumen),
+                color=0x2ecc71
+            )
+            embed.set_footer(text="¡Tu equipo está listo para batallar!")
+            await inter.response.edit_message(content=None, embed=embed, view=None)
+
+    select.callback = select_callback
+    view = discord.ui.View(timeout=60)
+    view.add_item(select)
+
+    msg = f"**Paso {step+1}/3** — Elige tu figura **{pos_names[step]}** ({pos_desc[step]})"
+    if hasattr(interaction, 'response') and not interaction.response.is_done():
+        await interaction.response.send_message(msg, view=view, ephemeral=True)
+    else:
+        await interaction.followup.send(msg, view=view, ephemeral=True)
+
+
+# ============================================================
+#  BOTS RIVALES — dificultad progresiva + jefe final
+# ============================================================
+BOT_ROSTER = [
+    {
+        "id": "facil",
+        "name": "🪆 Maniquí de Combate",
+        "desc": "Solo está ahí para recibir golpes. No te pongas nervioso.",
+        "difficulty": 1,
+        "team": ["agustoloco", "agustoloco", "agustoloco"],
+        "level": 1,
+        "reward_coins": 80,
+        "reward_xp": 30,
+    },
+    {
+        "id": "medio",
+        "name": "💼 Trabajador Ocupado",
+        "desc": "Está peleando en su hora de almuerzo. Tiene algo de experiencia.",
+        "difficulty": 2,
+        "team": ["gamer64", "agustoloco", "agustoloco"],
+        "level": 3,
+        "reward_coins": 150,
+        "reward_xp": 60,
+    },
+    {
+        "id": "dificil",
+        "name": "🎮 Jugador Tryhard",
+        "desc": "Lleva 14 horas jugando sin dormir. Un rival serio.",
+        "difficulty": 3,
+        "team": ["sonic", "gamer64", "agustoloco"],
+        "level": 6,
+        "reward_coins": 250,
+        "reward_xp": 100,
+    },
+    {
+        "id": "experto",
+        "name": "👾 Glitch",
+        "desc": "Un OC malvado que rompe las reglas del juego. Muy pocos lo han derrotado.",
+        "difficulty": 4,
+        "team": ["sonic", "alex", "gamer64"],
+        "level": 10,
+        "reward_coins": 400,
+        "reward_xp": 150,
+    },
+    {
+        "id": "jefe",
+        "name": "💀 El Antifas Antifasado",
+        "desc": "El jefe supremo. Nadie sabe de dónde vino. Sus figuras no se consiguen en la tienda.",
+        "difficulty": 5,
+        "team": ["antifas", "roblox_boss", "gamer64"],
+        "level": 20,
+        "reward_coins": 1000,
+        "reward_xp": 500,
+        "is_boss": True,
+    },
+]
+
+# Figuras exclusivas del jefe (versiones potenciadas)
+# --- Figuras exclusivas del jefe (price=0 = no aparecen en tienda) ---
+FIGURES["antifas"] = {
+    "name": "Antifas Antifasado",
+    "emoji": "🦝",
+    "rarity": "legendario",
+    "price": 0,
+    "hp": 235,
+    "attack": 40,
+    "defense": 38,
+    "speed": 39,
+    "image": "",
+}
+FIGURE_SKILLS["antifas"] = [
+    {
+        "name": "Heroic Pose",
+        "cost": 30,
+        "type": "team_atk_buff",   # buff de ATK acumulable al equipo
+        "power": 0,
+        "atk_buff": 15,            # +15 ATK acumulable, se consume al atacar
+        "team_buff": True,
+        "desc": "Pose heroica: +15 ATK a todas las figuras aliadas. Acumulable. Se consume al atacar.",
+    },
+    {
+        "name": "Throwable Bomb",
+        "cost": 60,
+        "type": "dot",             # daño por turnos
+        "power": 10,
+        "dot_turns": 3,            # dura 3 turnos
+        "dot_stackable": True,     # acumulable
+        "desc": "Lanza una bomba venenosa. 10 de daño cada turno por 3 turnos. ¡Acumulable!",
+    },
+    {
+        "name": "Dark Hole",
+        "cost": 100,
+        "type": "damage",
+        "power": 15,
+        "force_switch": True,
+        "force_switch_turns": 3,
+        "desc": "Invoca un agujero negro que manda a una figura enemiga al vacío por 3 turnos.",
+    },
+]
+
+# --- Roblox (disponible en tienda Y usado por el jefe con stats superiores) ---
+FIGURES["roblox"] = {
+    "name": "Roblox",
+    "emoji": "🔳",
+    "rarity": "mítico",
+    "price": 2003,
+    "hp": 230,           # stats de tienda
+    "attack": 35,
+    "defense": 45,
+    "speed": 35,
+    "image": "https://tr.rbxcdn.com/30DAY-Avatar-310966282D3529E36976BF6B07B1DC90-Png/720/720/Avatar/Webp/noFilter",
+}
+FIGURES["roblox_boss"] = {
+    "name": "Roblox",
+    "emoji": "🔳",
+    "rarity": "mítico",
+    "price": 0,          # no aparece en tienda
+    "hp": 270,           # stats del jefe
+    "attack": 50,
+    "defense": 45,
+    "speed": 35,
+    "image": "https://tr.rbxcdn.com/30DAY-Avatar-310966282D3529E36976BF6B07B1DC90-Png/720/720/Avatar/Webp/noFilter",
+}
+_roblox_skills = [
+    {
+        "name": "Bad Update",
+        "cost": 30,
+        "type": "bad_update",      # daño aleatorio a enemigos + cura aliados
+        "power": 0,
+        "desc": "Mala actualización: daña 4/6/8 a cada enemigo y cura la mitad a cada aliado.",
+    },
+    {
+        "name": "Shut Down",
+        "cost": 60,
+        "type": "damage",
+        "power": 20,
+        "stun": True,
+        "stun_turns": 3,           # stun extendido 3 turnos
+        "desc": "Apaga los servidores. Aturde a la figura enemiga activa por 3 turnos.",
+    },
+    {
+        "name": "Ban Hammer",
+        "cost": 100,
+        "type": "ban_hammer",      # 50/50: mata al enemigo O a un aliado
+        "power": 0,
+        "desc": "50% de chances de eliminar a la figura enemiga activa. El otro 50%... mata a una aliada.",
+    },
+]
+FIGURE_SKILLS["roblox"] = _roblox_skills
+FIGURE_SKILLS["roblox_boss"] = _roblox_skills
+
+# --- BATALLA CONTRA BOT ---
+@bot.tree.command(name="pvpbot", description="Elige un rival bot y batalla con tu equipo")
+async def pvpbot(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if interaction.channel_id in active_battles:
+        await interaction.response.send_message("❌ Ya hay una batalla activa en este canal.", ephemeral=True)
+        return
+
+    owned = user.get("figures", [])
+    if not owned:
+        await interaction.response.send_message("❌ No tienes figuras. Compra en `/tienda`.", ephemeral=True)
+        return
+
+    # Mostrar selector de bot rival
+    embed = discord.Embed(
+        title="⚔️ Elige tu rival",
+        description="Selecciona contra quién quieres batallar:",
+        color=0x3498db
+    )
+    for b in BOT_ROSTER:
+        team_preview = " | ".join(FIGURES[k]["emoji"] + " " + FIGURES[k]["name"] for k in b["team"] if k in FIGURES)
+        diff_stars = "⭐" * b["difficulty"]
+        boss_tag = " 👑 **JEFE FINAL**" if b.get("is_boss") else ""
+        embed.add_field(
+            name=f"{b['name']}{boss_tag} {diff_stars}",
+            value=f"{b['desc']}\n🎭 Equipo: {team_preview}\n💰 Recompensa: {b['reward_coins']}🪙 +{b['reward_xp']}XP",
+            inline=False
+        )
+
+
+    view = discord.ui.View(timeout=60)
+    for b in BOT_ROSTER:
+        style = discord.ButtonStyle.danger if b.get("is_boss") else discord.ButtonStyle.primary
+        btn = discord.ui.Button(
+            label=b["name"],
+            style=style,
+            custom_id=f"fight_{b['id']}"
+        )
+        btn.callback = make_bot_fight_callback(b, user, interaction.user.id)
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
+def make_bot_fight_callback(bot_data, user, user_discord_id):
+    async def callback(inter: discord.Interaction):
+        if inter.user.id != user_discord_id:
+            await inter.response.send_message("❌ Este menú no es tuyo.", ephemeral=True)
+            return
+        if inter.channel_id in active_battles:
+            await inter.response.send_message("❌ Ya hay una batalla activa.", ephemeral=True)
+            return
+
+        db = load_db()
+        usr = get_user(db, inter.user.id)
+        owned = usr.get("figures", [])
+
+        team_indices = usr.get("team", [None, None, None])
+        p1_keys, p1_figs_data = [], []
+        for idx in team_indices:
+            if idx is not None and idx < len(owned):
+                p1_keys.append(owned[idx]["key"])
+                p1_figs_data.append(owned[idx])
+        while len(p1_keys) < 3 and owned:
+            p1_keys.append(owned[0]["key"])
+            p1_figs_data.append(owned[0])
+
+        bot_level = bot_data["level"]
+        p2_keys = bot_data["team"]
+        p2_figs_data = [{"key": k, "level": bot_level, "xp": 0} for k in p2_keys]
+
+        battle = BattleState(
+            p1_id=inter.user.id,
+            p2_id=0,
+            p1_team_keys=p1_keys,
+            p2_team_keys=p2_keys,
+            p1_figs_data=p1_figs_data,
+            p2_figs_data=p2_figs_data,
+            is_bot=True
+        )
+        battle.p1_name = usr["name"]
+        battle.p2_name = bot_data["name"]
+        battle.bot_reward_coins = bot_data["reward_coins"]
+        battle.bot_reward_xp = bot_data["reward_xp"]
+
+        active_battles[inter.channel_id] = battle
+
+        boss_title = "💀 ¡BATALLA CONTRA EL JEFE FINAL!" if bot_data.get("is_boss") else f"⚔️ ¡BATALLA vs {bot_data['name']}!"
+        embed = battle.get_embed(title=boss_title)
+        view = get_battle_view(battle)
+        await inter.response.edit_message(embed=embed, view=view)
+        # Guardar referencia al mensaje para poder editarlo al cambiar figura
+        battle.message = await inter.original_response()
+    return callback
+
+# --- RETAR A JUGADOR ---
+@bot.tree.command(name="retar", description="Reta a otro jugador a un duelo PvP de equipos")
+@app_commands.describe(rival="El jugador al que quieres retar")
+async def retar(interaction: discord.Interaction, rival: discord.Member):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    rival_data = get_user(db, rival.id)
+
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not rival_data:
+        await interaction.response.send_message("❌ Tu rival no está registrado.", ephemeral=True)
+        return
+    if rival.id == interaction.user.id:
+        await interaction.response.send_message("❌ No puedes retarte a ti mismo.", ephemeral=True)
+        return
+    if not user.get("figures"):
+        await interaction.response.send_message("❌ No tienes figuras. Compra en `/tienda`.", ephemeral=True)
+        return
+    if not rival_data.get("figures"):
+        await interaction.response.send_message(f"❌ {rival.mention} no tiene figuras.", ephemeral=True)
+        return
+    if interaction.channel_id in active_battles:
+        await interaction.response.send_message("❌ Ya hay batalla activa aquí.", ephemeral=True)
+        return
+
+    u1_figs = user["figures"]
+    u2_figs = rival_data["figures"]
+
+    def build_team(figs, team_indices):
+        keys, datas = [], []
+        for idx in (team_indices or []):
+            if idx is not None and idx < len(figs):
+                keys.append(figs[idx]["key"]); datas.append(figs[idx])
+        while len(keys) < 3 and figs:
+            keys.append(figs[0]["key"]); datas.append(figs[0])
+        return keys[:3], datas[:3]
+
+    u1_keys, u1_data = build_team(u1_figs, user.get("team", []))
+    u2_keys, u2_data = build_team(u2_figs, rival_data.get("team", []))
+
+    # Preview del equipo
+    def team_preview(keys):
+        names = []
+        for k in keys:
+            fig = FIGURES.get(k)
+            if fig: names.append(f"{fig['emoji']} {fig['name']}")
+        return " | ".join(names)
+
+    embed = discord.Embed(
+        title="⚔️ ¡DESAFÍO PvP!",
+        description=f"{interaction.user.mention} reta a {rival.mention} a un duelo de equipos!",
+        color=0xe74c3c
+    )
+    embed.add_field(name=f"🥊 {user['name']}", value=team_preview(u1_keys), inline=False)
+    embed.add_field(name="⚡ VS ⚡", value="\u200b", inline=False)
+    embed.add_field(name=f"🥊 {rival_data['name']}", value=team_preview(u2_keys), inline=False)
+
+    accept_btn = discord.ui.Button(label="✅ Aceptar", style=discord.ButtonStyle.success, custom_id="accept_pvp")
+    reject_btn = discord.ui.Button(label="❌ Rechazar", style=discord.ButtonStyle.danger, custom_id="reject_pvp")
+
+    async def accept_callback(btn_inter: discord.Interaction):
+        if btn_inter.user.id != rival.id:
+            await btn_inter.response.send_message("❌ Solo el retado puede aceptar.", ephemeral=True)
+            return
+        if interaction.channel_id in active_battles:
+            await btn_inter.response.send_message("❌ Ya hay una batalla activa.", ephemeral=True)
+            return
+        db2 = load_db()
+        u1 = get_user(db2, interaction.user.id)
+        u2 = get_user(db2, rival.id)
+        def bteam(figs, tidx):
+            ks, ds = [], []
+            for i in (tidx or []):
+                if i is not None and i < len(figs):
+                    ks.append(figs[i]["key"]); ds.append(figs[i])
+            while len(ks) < 3 and figs:
+                ks.append(figs[0]["key"]); ds.append(figs[0])
+            return ks[:3], ds[:3]
+
+        k1, d1 = bteam(u1["figures"], u1.get("team", []))
+        k2, d2 = bteam(u2["figures"], u2.get("team", []))
+
+        battle = BattleState(
+            p1_id=interaction.user.id,
+            p2_id=rival.id,
+            p1_team_keys=k1,
+            p2_team_keys=k2,
+            p1_figs_data=d1,
+            p2_figs_data=d2,
+            is_bot=False
+        )
+        battle.p1_name = get_user(db2, interaction.user.id)["name"]
+        battle.p2_name = get_user(db2, rival.id)["name"]
+        active_battles[interaction.channel_id] = battle
+        view = get_battle_view(battle)
+        await btn_inter.response.edit_message(embed=battle.get_embed(title="⚔️ ¡LA BATALLA COMIENZA!"), view=view)
+        battle.message = await btn_inter.original_response()
+
+    async def reject_callback(btn_inter: discord.Interaction):
+        if btn_inter.user.id != rival.id:
+            await btn_inter.response.send_message("❌ Solo el retado puede rechazar.", ephemeral=True)
+            return
+        reject_embed = discord.Embed(title="❌ Desafío rechazado", description=f"{rival.mention} rechazó el duelo.", color=0x95a5a6)
+        await btn_inter.response.edit_message(embed=reject_embed, view=None)
+
+    accept_btn.callback = accept_callback
+    reject_btn.callback = reject_callback
+    view = discord.ui.View(timeout=60)
+    view.add_item(accept_btn)
+    view.add_item(reject_btn)
+    await interaction.response.send_message(content=rival.mention, embed=embed, view=view)
+
+# --- RANKING ---
+@bot.tree.command(name="ranking", description="Top 10 jugadores del servidor")
+async def ranking(interaction: discord.Interaction):
+    db = load_db()
+    users = db.get("users", {})
+    if not users:
+        await interaction.response.send_message("📭 Nadie registrado aún.", ephemeral=True)
+        return
+
+    sorted_users = sorted(users.values(), key=lambda u: u.get("wins", 0), reverse=True)[:10]
+
+    embed = discord.Embed(title="🏆 Ranking del Androide del PvP", color=0xf1c40f)
+    medals = ["🥇", "🥈", "🥉"] + ["🔸"] * 7
+
+    for i, u in enumerate(sorted_users):
+        winrate = 0
+        total = u.get("wins", 0) + u.get("losses", 0)
+        if total > 0:
+            winrate = round((u.get("wins", 0) / total) * 100, 1)
+        embed.add_field(
+            name=f"{medals[i]} {u['name']} (Nv.{u.get('level',1)})",
+            value=f"✅ {u.get('wins',0)}V / ❌ {u.get('losses',0)}D | WR: {winrate}% | 💰 {u.get('coins',0):,}",
+            inline=False
+        )
+
+    await interaction.response.send_message(embed=embed)
+
+# --- RECOMPENSA DIARIA ---
+DAILY_MAX_STREAK = 7
+
+DAILY_STREAK_REWARDS = {
+    1: {"coins": 300,  "emoji": "📦", "label": "Día 1"},
+    2: {"coins": 350,  "emoji": "📦", "label": "Día 2"},
+    3: {"coins": 450,  "emoji": "🎁", "label": "Día 3"},
+    4: {"coins": 500,  "emoji": "🎁", "label": "Día 4"},
+    5: {"coins": 600,  "emoji": "💎", "label": "Día 5"},
+    6: {"coins": 700,  "emoji": "💎", "label": "Día 6"},
+    7: {"coins": 1000, "emoji": "🌟", "label": "¡Racha Máxima!"},
+}
+
+# Probabilidad de figura según racha (día: % de chance)
+DAILY_FIGURE_CHANCE = {
+    1: 10,   # 10% día 1
+    2: 12,
+    3: 18,
+    4: 22,
+    5: 30,
+    6: 40,
+    7: 60,   # 60% en racha máxima
+}
+
+# Probabilidad de rareza según racha
+def get_figure_rarity_pool(streak):
+    """Devuelve un pool de claves de figuras ponderado por rareza según la racha."""
+    pool = []
+    for key, fig in FIGURES.items():
+        rarity = fig["rarity"]
+        # A más racha, más peso a figuras raras/épicas/legendarias
+        if rarity == "común":
+            weight = max(1, 6 - streak)        # baja con racha
+        elif rarity == "raro":
+            weight = 3
+        elif rarity == "épico":
+            weight = streak                     # sube con racha
+        elif rarity == "legendario":
+            weight = max(0, streak - 4)         # solo aparece en racha 5+
+        pool.extend([key] * weight)
+    return pool
+
+@bot.tree.command(name="diario", description="Reclama tu recompensa diaria (cada 24 horas)")
+async def diario(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    now = datetime.now(timezone.utc)
+    last_daily = user.get("last_daily")
+    streak = user.get("daily_streak", 0)
+
+    if last_daily:
+        last_dt = datetime.fromisoformat(last_daily)
+        diff_hours = (now - last_dt).total_seconds() / 3600
+
+        if diff_hours < 24:
+            remaining = 24 - diff_hours
+            horas = int(remaining)
+            minutos = int((remaining - horas) * 60)
+
+            embed = discord.Embed(
+                title="⏰ Ya reclamaste tu recompensa hoy",
+                description=f"Vuelve en **{horas}h {minutos}m** para el siguiente diario.",
+                color=0xe74c3c
+            )
+            embed.add_field(name="🔥 Racha actual", value=f"{streak} día(s)", inline=True)
+            barra = "".join(
+                DAILY_STREAK_REWARDS[d]["emoji"] if d <= streak else "⬛"
+                for d in range(1, DAILY_MAX_STREAK + 1)
+            )
+            embed.add_field(name="📅 Racha semanal", value=barra, inline=False)
+            # Mostrar % de figura del día siguiente
+            next_streak = min(streak + 1, DAILY_MAX_STREAK)
+            chance = DAILY_FIGURE_CHANCE[next_streak]
+            embed.add_field(
+                name="🎲 Mañana tendrás",
+                value=f"**{chance}%** de probabilidad de ganar una figura gratis!",
+                inline=False
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+
+        elif diff_hours >= 48:
+            streak = 0
+
+    # Reclamar recompensa
+    streak = min(streak + 1, DAILY_MAX_STREAK)
+    reward = DAILY_STREAK_REWARDS[streak]
+    coins_earned = reward["coins"]
+
+    user["coins"] = user.get("coins", 0) + coins_earned
+    user["last_daily"] = now.isoformat()
+    user["daily_streak"] = streak
+
+    # ¿Gana figura?
+    figure_won = None
+    chance = DAILY_FIGURE_CHANCE[streak]
+    owned_keys = [f["key"] for f in user.get("figures", [])]
+    available_keys = [k for k in FIGURES.keys() if k not in owned_keys]
+
+    if available_keys and random.randint(1, 100) <= chance:
+        pool = [k for k in get_figure_rarity_pool(streak) if k in available_keys]
+        if pool:
+            figure_won = random.choice(pool)
+            user["figures"].append({"key": figure_won, "level": 1, "xp": 0})
+            if not user.get("active_figure"):
+                user["active_figure"] = figure_won
+
+    save_db(db)
+
+    # Embed principal
+    is_max = streak == DAILY_MAX_STREAK
+    color = 0xf1c40f if is_max else (0x9b59b6 if streak >= 5 else (0x3498db if streak >= 3 else 0x2ecc71))
+
+    desc = "🎊 ¡RACHA MÁXIMA! ¡INCREÍBLE! 🎊" if is_max else f"¡Buen trabajo, **{user['name']}**!"
+    embed = discord.Embed(
+        title=f"{reward['emoji']} ¡Recompensa Diaria Reclamada!",
+        description=desc,
+        color=color
+    )
+
+    embed.add_field(name="💰 Monedas ganadas", value=f"+**{coins_earned:,}** monedas", inline=True)
+    embed.add_field(name="💳 Total actual", value=f"**{user['coins']:,}** monedas", inline=True)
+    embed.add_field(name="🔥 Racha", value=f"**{streak}** día(s) seguidos", inline=True)
+
+    barra = "".join(
+        DAILY_STREAK_REWARDS[d]["emoji"] if d <= streak else "⬛"
+        for d in range(1, DAILY_MAX_STREAK + 1)
+    )
+    embed.add_field(name="📅 Progreso semanal", value=barra, inline=False)
+
+    # Bloque de figura ganada
+    if figure_won:
+        fig = FIGURES[figure_won]
+        star = RARITY_STARS[fig["rarity"]]
+        embed.add_field(
+            name="🎉 ¡FIGURA SORPRESA!",
+            value=(
+                f"{fig['emoji']} **{fig['name']}** {star}\n"
+                f"Rareza: **{fig['rarity'].upper()}**\n"
+                f"❤️ HP:{fig['hp']} ⚔️ ATK:{fig['attack']} 🛡️ DEF:{fig['defense']} ⚡ VEL:{fig['speed']}\n" +
+                " | ".join(f"✨{sk['name']}" for sk in FIGURE_SKILLS.get(key, []))
+            ),
+            inline=False
+        )
+        if fig.get("image"):
+            embed.set_image(url=fig["image"])
+        embed.color = RARITY_COLOR[fig["rarity"]]
+    else:
+        # Mostrar % de figura para motivar
+        embed.add_field(
+            name="🎲 Probabilidad de figura hoy",
+            value=f"Tenías **{chance}%** de ganar una figura. ¡Sigue intentando mañana!",
+            inline=False
+        )
+
+    # Próxima recompensa
+    if streak < DAILY_MAX_STREAK:
+        next_reward = DAILY_STREAK_REWARDS[streak + 1]
+        next_chance = DAILY_FIGURE_CHANCE[streak + 1]
+        embed.add_field(
+            name="➡️ Mañana",
+            value=(
+                f"{next_reward['emoji']} **{next_reward['coins']:,}** monedas\n"
+                f"🎲 **{next_chance}%** de probabilidad de figura!"
+            ),
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="🔄 Racha reiniciada",
+            value="Mañana empieza una nueva racha semanal. ¡Eres una leyenda!",
+            inline=False
+        )
+        user["daily_streak"] = 0
+        save_db(db)
+
+    embed.set_footer(text="Vuelve en 24 horas para mantener tu racha!")
+    await interaction.response.send_message(embed=embed)
+
+# --- AYUDA ---
+@bot.tree.command(name="ayuda", description="Ver todos los comandos disponibles")
+async def ayuda(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🤖 Androide del PvP — Comandos",
+        description="¡Bienvenido al sistema de batallas de figuras!",
+        color=0x3498db
+    )
+    embed.add_field(name="📋 Inicio", value="`/registrar` — Créate una cuenta y recibe 1,000 monedas", inline=False)
+    embed.add_field(name="👤 Perfil", value="`/perfil` — Ve tus stats, nivel y monedas", inline=False)
+    embed.add_field(name="🏪 Tienda", value="`/tienda` — Compra nuevas figuras con botones", inline=False)
+    embed.add_field(name="🎭 Colección", value="`/misfiguras` — Ve todas tus figuras y sus niveles", inline=False)
+    embed.add_field(name="⚡ Equipar", value="`/equipar` — Elige tu figura activa para batallar", inline=False)
+    embed.add_field(name="🤖 PvP vs Bot", value="`/pvpbot` — Batalla contra un bot IA", inline=False)
+    embed.add_field(name="⚔️ PvP", value="`/retar @usuario` — Reta a otro jugador a duelo", inline=False)
+    embed.add_field(name="🏆 Ranking", value="`/ranking` — Top 10 del servidor", inline=False)
+    embed.add_field(name="📅 Diario", value="`/diario` — Reclama monedas diarias y mantén tu racha!", inline=False)
+    embed.add_field(name="💰 Admin", value="`/oro @usuario cantidad` — Regala monedas a un usuario [Solo admins]", inline=False)
+    embed.set_footer(text="¡Colecciona, mejora y conquista la arena!")
+    await interaction.response.send_message(embed=embed)
+
+
+# --- LOBSTER ---
+@bot.tree.command(name="lobster", description="🦞 Obtén una langosta misteriosa")
+async def lobster_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    user["figures"].append({"key": "lobster", "level": 1, "xp": 0})
+    # Añadir al equipo si hay hueco
+    team = user.get("team", [None, None, None])
+    while len(team) < 3: team.append(None)
+    for i in range(3):
+        if team[i] is None:
+            team[i] = len(user["figures"]) - 1
+            break
+    user["team"] = team
+    save_db(db)
+
+    embed = discord.Embed(
+        title="🦞 Una langosta ha aparecido",
+        description="No sabes de dónde vino. No sabes qué quiere.\nPero ahora es tuya.",
+        color=0xe74c3c
+    )
+    embed.add_field(name="❤️ Vida", value="1", inline=True)
+    embed.add_field(name="⚔️ Ataque", value="1", inline=True)
+    embed.add_field(name="🛡️ Defensa", value="1", inline=True)
+    embed.add_field(
+        name="✨ Habilidad: LOBSTER",
+        value="No hace nada.\nO eso crees. Tiene un **0.01%** de matar a todas las figuras enemigas.",
+        inline=False
+    )
+    embed.set_footer(text="Úsala con /equipar. Buena suerte.")
+    await interaction.response.send_message(embed=embed)
+
+# --- ORO (ADMIN) ---
+@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
+@app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
+async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
+    # Verificar que el autor tiene permisos de administrador
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ Solo los administradores pueden usar este comando.", ephemeral=True)
+        return
+    if cantidad <= 0:
+        await interaction.response.send_message("❌ La cantidad debe ser mayor a 0.", ephemeral=True)
+        return
+
+    db = load_db()
+    target = get_user(db, usuario.id)
+    if not target:
+        await interaction.response.send_message(f"❌ {usuario.mention} no está registrado en el bot.", ephemeral=True)
+        return
+
+    target["coins"] = target.get("coins", 0) + cantidad
+    save_db(db)
+
+    embed = discord.Embed(
+        title="💰 ¡Monedas regaladas!",
+        color=0xf1c40f
+    )
+    embed.add_field(name="👤 Receptor", value=f"{target['name']} ({usuario.mention})", inline=True)
+    embed.add_field(name="💰 Cantidad", value=f"+**{cantidad:,}** monedas", inline=True)
+    embed.add_field(name="💳 Nuevo saldo", value=f"**{target['coins']:,}** monedas", inline=True)
+    embed.set_footer(text=f"Otorgado por {interaction.user.display_name}")
+    await interaction.response.send_message(embed=embed)
+
+# ============================================================
+#  ARRANQUE
+# ============================================================
+bot.run(TOKEN)
