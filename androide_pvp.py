@@ -19,6 +19,7 @@ threading.Thread(target=run).start()
 # ============================================================
 #  CONFIGURACION - Carga el token seguro desde Render
 # ============================================================
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
@@ -872,45 +873,33 @@ def make_switch_callback(battle: BattleState, switchable: list, cur_team: list):
                 "   (Cambio de figura — el rival ataca este turno)"
             ]
 
-            # Borrar el mensaje del selector
-            await inter.response.defer()
-            try:
-                await inter.message.delete()
-            except Exception:
-                pass
-
             # El cambio cuesta el turno: pasa al rival
             battle.turn = 2 if battle.turn == 1 else 1
             channel_id = inter.channel_id
 
-            # Editar el mensaje original de la batalla
-            if battle.message:
-                if battle.is_bot and battle.turn == 2:
-                    await battle.message.edit(embed=battle.get_embed(), view=None)
-                    await asyncio.sleep(1.2)
-                    await bot_turn(inter, battle, channel_id)
-                else:
-                    await battle.message.edit(embed=battle.get_embed(), view=get_battle_view(battle))
+            # Editar el mensaje del selector con el estado actualizado de la batalla
+            # (el mensaje de batalla original nunca fue tocado)
+            if battle.is_bot and battle.turn == 2:
+                await inter.response.edit_message(embed=battle.get_embed(), view=None)
+                # Sincronizar battle.message con este mensaje para que bot_turn pueda editarlo
+                battle.message = await inter.original_response()
+                await asyncio.sleep(1.2)
+                await bot_turn(inter, battle, channel_id)
             else:
-                # Fallback: enviar nuevo mensaje
-                if battle.is_bot and battle.turn == 2:
-                    msg = await inter.channel.send(embed=battle.get_embed())
-                    battle.message = msg
-                    await asyncio.sleep(1.2)
-                    await bot_turn(inter, battle, channel_id)
-                else:
-                    msg = await inter.channel.send(embed=battle.get_embed(), view=get_battle_view(battle))
-                    battle.message = msg
+                await inter.response.edit_message(embed=battle.get_embed(), view=get_battle_view(battle))
+                battle.message = await inter.original_response()
 
         select.callback = select_cb
         sw_view = discord.ui.View(timeout=120)
         sw_view.add_item(select)
 
-        # El selector sale en el canal (no ephemeral) y edita el mensaje de batalla
-        await interaction.response.edit_message(
+        # Enviar el selector como mensaje NUEVO (sin tocar el mensaje de batalla)
+        # y actualizar battle.message para que apunte a este nuevo mensaje
+        await interaction.response.send_message(
             embed=battle.get_embed(title="🔄 Elige tu figura de reemplazo"),
             view=sw_view
         )
+        battle.message = await interaction.original_response()
 
     return callback
 
