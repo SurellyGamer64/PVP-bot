@@ -15,10 +15,12 @@ def home(): return "Bot Online"
 
 def run(): app.run(host='0.0.0.0', port=8080)
 threading.Thread(target=run).start()
+
 # ============================================================
-#  CONFIGURACION - Pon tu token aquí
+#  CONFIGURACION - Carga el token seguro desde Render
 # ============================================================
-TOKEN = ""
+
+TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
 # ============================================================
