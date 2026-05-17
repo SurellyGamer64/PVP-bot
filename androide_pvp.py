@@ -19,7 +19,6 @@ threading.Thread(target=run).start()
 # ============================================================
 #  CONFIGURACION - Carga el token seguro desde Render
 # ============================================================
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 PREFIX = "!"
 
@@ -873,14 +872,18 @@ def make_switch_callback(battle: BattleState, switchable: list, cur_team: list):
                 "   (Cambio de figura — el rival ataca este turno)"
             ]
 
+            # Borrar el mensaje del selector
+            await inter.response.defer()
+            try:
+                await inter.message.delete()
+            except Exception:
+                pass
+
             # El cambio cuesta el turno: pasa al rival
             battle.turn = 2 if battle.turn == 1 else 1
             channel_id = inter.channel_id
 
-            # Cerrar el ephemeral del selector
-            await inter.response.defer()
-
-            # Editar el mensaje original de la batalla (siempre disponible)
+            # Editar el mensaje original de la batalla
             if battle.message:
                 if battle.is_bot and battle.turn == 2:
                     await battle.message.edit(embed=battle.get_embed(), view=None)
@@ -903,11 +906,10 @@ def make_switch_callback(battle: BattleState, switchable: list, cur_team: list):
         sw_view = discord.ui.View(timeout=120)
         sw_view.add_item(select)
 
-        # El selector sale como ephemeral para no sobreescribir el mensaje de batalla
-        await interaction.response.send_message(
+        # El selector sale en el canal (no ephemeral) y edita el mensaje de batalla
+        await interaction.response.edit_message(
             embed=battle.get_embed(title="🔄 Elige tu figura de reemplazo"),
-            view=sw_view,
-            ephemeral=True
+            view=sw_view
         )
 
     return callback
