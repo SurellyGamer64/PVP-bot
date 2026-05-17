@@ -1,0 +1,218 @@
+{
+  "users": {
+    "1236293193893412975": {
+      "name": "Gamer64",
+      "coins": 22604,
+      "figures": [
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "agustoloco",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "alex",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "agustoloco",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "roblox",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "michibug",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "sonic",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "tails",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "hatred",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "chicken",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "ringmaster",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "lobster",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "lobster",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "lobster",
+          "level": 1,
+          "xp": 0
+        }
+      ],
+      "active_figure": "gamer64",
+      "wins": 0,
+      "losses": 0,
+      "level": 1,
+      "xp": 0,
+      "last_daily": "2026-05-16T18:20:47.634971+00:00",
+      "daily_streak": 2,
+      "team": [
+        0,
+        1,
+        2
+      ]
+    },
+    "1384663451648921610": {
+      "name": "Klin",
+      "coins": 2785,
+      "figures": [
+        {
+          "key": "alex",
+          "level": 1,
+          "xp": 0
+        }
+      ],
+      "active_figure": "alex",
+      "wins": 0,
+      "losses": 0,
+      "level": 1,
+      "xp": 0
+    },
+    "1299853151184228353": {
+      "name": "agus",
+      "coins": 784,
+      "figures": [
+        {
+          "key": "agustoloco",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "key": "alex",
+          "level": 1,
+          "xp": 0
+        }
+      ],
+      "active_figure": "agustoloco",
+      "wins": 0,
+      "losses": 0,
+      "level": 1,
+      "xp": 0
+    },
+    "1363657564826370161": {
+      "name": "Light: El dios del hielo",
+      "coins": 342814120407403,
+      "figures": [
+        {
+          "key": "roblox",
+          "level": 1,
+          "xp": 16
+        },
+        {
+          "key": "roblox",
+          "level": 1,
+          "xp": 16
+        },
+        {
+          "key": "roblox",
+          "level": 1,
+          "xp": 16
+        }
+      ],
+      "team": [
+        0,
+        1,
+        2
+      ],
+      "wins": 1,
+      "losses": 0,
+      "level": 1,
+      "xp": 50,
+      "last_daily": "2026-05-10T15:07:49.666319+00:00",
+      "daily_streak": 1
+    },
+    "1411518770362454046": {
+      "name": "Michi",
+      "coins": 10544,
+      "figures": [
+        {
+          "key": "agustoloco",
+          "level": 1,
+          "xp": 16
+        },
+        {
+          "key": "gamer64",
+          "level": 1,
+          "xp": 16
+        },
+        {
+          "key": "alex",
+          "level": 1,
+          "xp": 16
+        }
+      ],
+      "team": [
+        0,
+        1,
+        2
+      ],
+      "wins": 1,
+      "losses": 0,
+      "level": 1,
+      "xp": 50,
+      "last_daily": "2026-05-16T18:42:33.701994+00:00",
+      "daily_streak": 1
+    }
+  }
+}
