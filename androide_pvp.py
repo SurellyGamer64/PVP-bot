@@ -92,7 +92,7 @@ FIGURES = {
         "rarity": "legendario",
         "price": 215,
         "hp": 250,
-        "attack": 20,
+        "attack": 14,
         "defense": 30,
         "speed": 50,
         "image": "https://i.imgur.com/iJctAhj.png",  # Pon la URL aquí
@@ -147,7 +147,7 @@ FIGURES = {
         "emoji": "🐔",
         "rarity": "legendario",
         "price": 2006,
-        "hp": 175,
+        "hp": 210,
         "attack": 45,
         "defense": 30,
         "speed": 30,
@@ -186,14 +186,115 @@ FIGURES = {
         "speed": 1,
         "image": "https://i.imgur.com/ZEPFJmF.png",  # Pon la URL aquí
     },
+    "007n7": {
+        "name": "007n7",
+        "emoji": "🍔",
+        "rarity": "epico",
+        "price": 500,
+        "hp": 210,
+        "attack": 21,
+        "defense": 32,
+        "speed": 30,
+        "image": "https://i.redd.it/b5tes4g0w75f1.jpeg",
+    },
+    "kidd": {
+        "name": "c00lkidd",
+        "emoji": "😎",
+        "rarity": "legendario",
+        "price": 900,
+        "hp": 220,
+        "attack": 40,
+        "defense": 30,
+        "speed": 52,
+        "image": "https://media.printables.com/media/prints/42d1eb40-be5b-4dbe-aebf-e11a8c2538b9/images/11589036_18ec24f9-1577-4fac-94f1-e62f2d551df7_12dfa319-2d71-4dfc-a36b-85c25efc5e83/thumbs/inside/1280x960/jpg/artworks-ugygzb9kdqny96ww-9vz6cq-t1080x1080.webp",
+    },
+    "twotime": {
+        "name": "Two Time",
+        "emoji": "🗡️",
+        "rarity": "epico",
+        "price": 500,
+        "hp": 170,
+        "attack": 25,
+        "defense": 25,
+        "speed": 30,
+        "image": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000da84d1891be46091133c6e496f49",
+    },
+    "noli": {
+        "name": "Noli",
+        "emoji": "✨",
+        "rarity": "legendario",
+        "price": 1100,
+        "hp": 211,
+        "attack": 25,
+        "defense": 20,
+        "speed": 30,
+        "image": "https://static.wikia.nocookie.net/forsaken2024/images/2/26/NoliChangedRender.png/revision/latest?cb=20260423180748",
+        "passive": "hallucinations",
+    },
+    "guest1337": {
+        "name": "Guest1337",
+        "emoji": "👊",
+        "rarity": "epico",
+        "price": 500,
+        "hp": 215,
+        "attack": 30,
+        "defense": 25,
+        "speed": 30,
+        "image": "https://static.wikia.nocookie.net/forsaken2024/images/thumb/f/f2/Guest_1337_Render.png/220px-Guest_1337_Render.png",
+    },
+    "noob": {
+        "name": "Noob",
+        "emoji": "😃",
+        "rarity": "raro",
+        "price": 450,
+        "hp": 200,
+        "attack": 20,
+        "defense": 20,
+        "speed": 20,
+        "image": "https://static.wikia.nocookie.net/forsaken2024/images/7/7c/Noobnewest.png/revision/latest?cb=20260417122231",
+    },
+    "chance": {
+        "name": "Chance",
+        "emoji": "🔫",
+        "rarity": "legendario",
+        "price": 777,
+        "hp": 200,
+        "attack": 27,
+        "defense": 37,
+        "speed": 37,
+        "image": "https://static.wikia.nocookie.net/lgbt-characters/images/b/bd/Chance_%28Forsaken%29.png/revision/latest/thumbnail/width/360/height/450?cb=20260320010117",
+    },
+    "johndoe": {
+        "name": "John Doe",
+        "emoji": "💢",
+        "rarity": "legendario",
+        "price": 1120,
+        "hp": 202,
+        "attack": 30,
+        "defense": 40,
+        "speed": 30,
+        "image": "https://i.redd.it/p5y051gk6mve1.jpeg",
+    },
+    "janedoe": {
+        "name": "Jane Doe",
+        "emoji": "🪓",
+        "rarity": "epico",
+        "price": 800,
+        "hp": 170,
+        "attack": 35,
+        "defense": 30,
+        "speed": 35,
+        "image": "https://static.wikia.nocookie.net/forsaken2024/images/4/4e/JaneDoerender.png/revision/latest/smart/width/300/height/300?cb=20260308103449",
+    },
 }
-
 
 RARITY_COLOR = {
     "común": 0x95a5a6,
     "raro": 0x3498db,
     "épico": 0x9b59b6,
+    "epico": 0x9b59b6,
     "legendario": 0xf1c40f,
+    "Legendario": 0xf1c40f,
     "mítico": 0xff0000,
 }
 
@@ -201,7 +302,9 @@ RARITY_STARS = {
     "común": "⚪",
     "raro": "🔵",
     "épico": "🟣",
+    "epico": "🟣",
     "legendario": "🌟",
+    "Legendario": "🌟",
     "mítico": "🔱",
 }
 
@@ -292,8 +395,8 @@ FIGURE_SKILLS = {
             "cost": 30,
             "type": "parry",        # Tipo especial: contraataca si el rival ataca este turno
             "power": 0,             # Sin daño directo
-            "parry_dmg_pct": 25,    # Contraataca con 25% del HP máximo del rival
-            "desc": "Alex hace un parry. Si el rival ataca este turno, lo contraataca quitándole el 25% de su vida.",
+            "parry_flat_bonus": 10, # Contraataca con el daño del ataque + 10
+            "desc": "Alex hace un parry. Si el rival ataca este turno, lo contraataca con su propio daño +10.",
         },
         {
             "name": "Carga Estelar",
@@ -301,13 +404,13 @@ FIGURE_SKILLS = {
             "type": "buff",         # Tipo buff: potencia el siguiente ataque
             "power": 0,
             "atk_buff": 15,         # Suma 15 de ATK temporal al siguiente golpe
-            "desc": "La estrella de Alex brilla y carga su poder. Su próximo golpe hará 35 de daño en vez de 20.",
+            "desc": "La estrella de Alex brilla y carga su poder. Su próximo golpe hará más daño.",
         },
         {
             "name": "Esfera Luminosa",
             "cost": 100,
             "type": "damage",
-            "power": 15,
+            "power": 14,
             "force_switch": True,
             "force_switch_turns": 2,  # Ciega al rival 2 turnos
             "desc": "Alex lanza una esfera de luz que explota, cegando al rival por 2 turnos y haciéndole daño.",
@@ -466,7 +569,7 @@ FIGURE_SKILLS = {
             "name": "Fast Kill",
             "cost": 60,
             "type": "fast_kill",   # requiere 3 usos seguidos
-            "power": 190,
+            "power": 50,
             "charges_needed": 3,
             "desc": "El Impostor se acerca y clava su cuchillo. Úsalo 3 turnos seguidos para activarlo.",
         },
@@ -557,6 +660,227 @@ FIGURE_SKILLS = {
             "desc": "Sonic corre a máxima velocidad y golpea al rival, dejándolo fuera de combate por 3 turnos.",
         },
     ],
+    # ─── NUEVAS FIGURAS ───────────────────────────────────────────
+    "007n7": [
+        {
+            "name": "Switch Clone Type",
+            "cost": 30,
+            "type": "clone_switch",  # cambia entre def/atk/heal
+            "power": 0,
+            "desc": "007n7 cambia el tipo de clon que usará: DEF (bloquea 2 golpes), ATK (parry con mitad del daño), HEAL (cura según el daño recibido).",
+        },
+        {
+            "name": "Clone",
+            "cost": 60,
+            "type": "clone_action",  # ejecuta según tipo activo
+            "power": 0,
+            "desc": "007n7 lanza un clon. Su comportamiento depende del tipo activo (def/atk/heal).",
+        },
+        {
+            "name": "Teleport",
+            "cost": 100,
+            "type": "teleport_007",  # cede turno, se cura 10/turno, vuelve al tener HP lleno o si aliado muere
+            "power": 0,
+            "desc": "007n7 se teletransporta lejos, cede sus turnos y se cura 10HP por turno hasta tener vida llena.",
+        },
+    ],
+    "kidd": [
+        {
+            "name": "Fling Brick",
+            "cost": 30,
+            "type": "fling_brick",   # daño + reduce ATK rival, 20% de forzar cambio
+            "power": 10,
+            "desc": "c00lkidd lanza un ladrillo. Reduce el ATK del rival. 20% de mandarlo a volar (fuerza cambio).",
+        },
+        {
+            "name": "Walkspeed Override",
+            "cost": 60,
+            "type": "damage",
+            "power": 40,
+            "dot": True,
+            "dot_power": 8,
+            "dot_turns": 3,
+            "desc": "c00lkidd carga hacia el oponente, haciéndole daño e inflingiéndole quemadura (8 daño/turno x3).",
+        },
+        {
+            "name": "Minions",
+            "cost": 100,
+            "type": "minion_shield",  # escudo de 2 golpes; si atacan con minions activos, el rival recibe 10 + quemadura
+            "power": 0,
+            "desc": "c00lkidd invoca minions: escudo de 2 golpes. Si atacan con minions activos, el rival recibe 10 daño + quemadura.",
+        },
+    ],
+    "twotime": [
+        {
+            "name": "Spawnpoint",
+            "cost": 30,
+            "type": "spawnpoint",    # coloca punto de respawn; pasiva: 4 backstabs = revive con 50% HP
+            "power": 0,
+            "desc": "Two Time coloca un punto de respawn. Si acumula 4 backstabs con barra llena, puede revivir con 50% HP.",
+        },
+        {
+            "name": "Backstab",
+            "cost": 60,
+            "type": "backstab",      # 15 daño + stun 1 turno + recarga barra
+            "power": 15,
+            "stun": True,
+            "bar_bonus": 20,
+            "desc": "Two Time se acerca y da un backstab. Aturde al rival 1 turno y recarga su barra.",
+        },
+        {
+            "name": "Crouch",
+            "cost": 100,
+            "type": "crouch",        # reduce daño recibido este turno, buff ATK 2 turnos
+            "power": 0,
+            "desc": "Two Time se agacha, reduciendo el daño recibido y aumentando su daño por 2 turnos.",
+        },
+    ],
+    "noli": [
+        {
+            "name": "Voidstar",
+            "cost": 30,
+            "type": "voidstar",      # 10 daño + atrae (próximo ataque hace más daño)
+            "power": 10,
+            "desc": "Noli lanza su voidstar, dañando al rival y preparando el próximo ataque para hacer +15 daño.",
+        },
+        {
+            "name": "Voidrush",
+            "cost": 60,
+            "type": "voidrush",      # 25 daño, +15 si rival tiene alucinaciones
+            "power": 25,
+            "desc": "Noli hace un Voidrush. Si el rival tiene alucinaciones, hace +15 daño extra.",
+        },
+        {
+            "name": "Observant",
+            "cost": 100,
+            "type": "observant",     # desaparece 5 turnos, pone figura sustituta; al volver hace daño masivo
+            "power": 0,
+            "desc": "Noli desaparece 5 turnos generando alucinaciones. Al volver hace daño masivo al enemigo activo.",
+        },
+    ],
+    "guest1337": [
+        {
+            "name": "Block",
+            "cost": 30,
+            "type": "guest_block",   # bloquea el siguiente ataque + gana carga para Punch
+            "power": 0,
+            "desc": "Guest bloquea el siguiente ataque y gana una carga para usar Punch.",
+        },
+        {
+            "name": "Charge",
+            "cost": 60,
+            "type": "damage",
+            "power": 25,
+            "dot": True,
+            "dot_power": 5,
+            "dot_turns": 2,
+            "desc": "Guest se lanza hacia el oponente, haciéndole daño y alejándolo (reduce su daño 2 turnos).",
+        },
+        {
+            "name": "Punch",
+            "cost": 100,
+            "type": "guest_punch",   # requiere carga de Block; 55 daño + stun 2 turnos
+            "power": 55,
+            "stun": True,
+            "stun_turns": 2,
+            "desc": "Requiere una carga de Block. Guest lanza un golpe masivo que aturde al rival 2 turnos.",
+        },
+    ],
+    "noob": [
+        {
+            "name": "Bloxy Cola",
+            "cost": 30,
+            "type": "bloxy_cola",    # incrementa la ganancia de energía por 2 turnos
+            "power": 0,
+            "desc": "Noob toma una Bloxy Cola. Gana +15 de energía extra por turno durante 2 turnos.",
+        },
+        {
+            "name": "Slateskin",
+            "cost": 60,
+            "type": "slateskin",     # se vuelve de piedra: recibe mitad del daño y devuelve mitad
+            "power": 0,
+            "desc": "Noob toma poción de slateskin. El próximo ataque que reciba hace mitad de daño y devuelve mitad al rival.",
+        },
+        {
+            "name": "GhostBurger",
+            "cost": 100,
+            "type": "ghostburger",   # evasión aumentada + cura 10 HP/turno por 4 turnos
+            "power": 0,
+            "desc": "Noob come una GhostBurger. Mayor evasión y se cura 10 HP por turno durante 4 turnos.",
+        },
+    ],
+    "chance": [
+        {
+            "name": "Coin Flip",
+            "cost": 30,
+            "type": "coin_flip",     # cara = gana carga (max 3); sello = próximo ataque le hace más daño
+            "power": 0,
+            "desc": "Chance gira su moneda. Cara = gana una carga (máx 3). Sello = el siguiente ataque le hará más daño.",
+        },
+        {
+            "name": "Gun Shot",
+            "cost": 60,
+            "type": "gun_shot",      # 1 carga=40% stun, 2=70%, 3=100%; resto puede explotar en la cara
+            "power": 0,
+            "desc": "Chance dispara su revólver. A más cargas, más probabilidad de stunear al rival.",
+        },
+        {
+            "name": "Reload Stats",
+            "cost": 100,
+            "type": "reload_stats",  # cambia HP de Chance aleatoriamente entre 150-250
+            "power": 0,
+            "desc": "Chance recarga su revólver y cambia sus stats aleatoriamente: nueva vida entre 150 y 250.",
+        },
+    ],
+    "johndoe": [
+        {
+            "name": "Spikes",
+            "cost": 30,
+            "type": "spikes",        # daño al rival + bloquea 2 ataques + John pierde 20 HP
+            "power": 15,
+            "desc": "John cubre el campo de espinas. Daña al rival, bloquea los siguientes 2 ataques, pero John pierde 20 HP.",
+        },
+        {
+            "name": "Error 404",
+            "cost": 60,
+            "type": "error404",      # John pierde 10 HP, barra llena + buff ATK +20 por 4 turnos
+            "power": 0,
+            "desc": "John se arranca el ojo (-10 HP). Su barra de energía se llena y gana +20 ATK por 4 turnos.",
+        },
+        {
+            "name": "Traps",
+            "cost": 100,
+            "type": "traps",         # 3 usos: al 3ro atrapa al rival con 20 daño/turno por 3 turnos
+            "power": 0,
+            "desc": "Úsala 3 veces para atrapar al rival en una trampa que hace 20 daño por turno durante 3 turnos.",
+        },
+    ],
+    "janedoe": [
+        {
+            "name": "Crystal Type",
+            "cost": 30,
+            "type": "crystal_switch",  # cambia entre tipo daño y tipo curación
+            "power": 0,
+            "desc": "Jane cambia el tipo de cristal: DAÑO (stuned + 20 daño) o CURACIÓN (cura al aliado con menos HP + inmunidad).",
+        },
+        {
+            "name": "Crystal Throw",
+            "cost": 60,
+            "type": "crystal_throw",   # ejecuta según tipo activo
+            "power": 20,
+            "desc": "Jane lanza un cristal. Si es de daño: 20 daño + stun 3 turnos. Si es curación: cura al aliado con menos HP + inmunidad 3 turnos.",
+        },
+        {
+            "name": "Hatchet",
+            "cost": 100,
+            "type": "damage",
+            "power": 45,
+            "dot": True,
+            "dot_power": 8,
+            "dot_turns": 4,
+            "desc": "Jane lanza su hacha hacia el enemigo, haciéndole daño y aplicando Resonancia (8 daño/turno x4).",
+        },
+    ],
 }
 
 
@@ -569,22 +893,28 @@ pending_pvp = {}
 ENERGY_PER_TURN = 20
 ENERGY_MAX = 100
 
-def make_fighter(fig_key, owner_fig_data):
-    """Crea un luchador con HP, energía y habilidades listas."""
+def make_fighter(fig_key, owner_fig_data, hp_mult=1.0, atk_mult=1.0, energy_bonus=0):
+    """Crea un luchador con HP, energía y habilidades listas.
+    hp_mult/atk_mult: multiplicadores para jefes más difíciles.
+    energy_bonus: energía extra por turno para jefes más difíciles.
+    """
     fig = FIGURES[fig_key]
     lvl = owner_fig_data.get("level", 1)
+    base_hp  = int(apply_level_bonus(fig["hp"],     lvl) * hp_mult)
+    base_atk = int(apply_level_bonus(fig["attack"],  lvl) * atk_mult)
     fighter = {
-        "key":      fig_key,
-        "name":     fig["name"],
-        "emoji":    fig["emoji"],
-        "hp":       apply_level_bonus(fig["hp"], lvl),
-        "max_hp":   apply_level_bonus(fig["hp"], lvl),
-        "atk":      apply_level_bonus(fig["attack"], lvl),
-        "defense":  apply_level_bonus(fig["defense"], lvl),
-        "level":    lvl,
-        "energy":   0,
-        "skills":   FIGURE_SKILLS.get(fig_key, FIGURE_SKILLS["gamer64"]),
-        "image":    fig.get("image", ""),
+        "key":          fig_key,
+        "name":         fig["name"],
+        "emoji":        fig["emoji"],
+        "hp":           base_hp,
+        "max_hp":       base_hp,
+        "atk":          base_atk,
+        "defense":      apply_level_bonus(fig["defense"], lvl),
+        "level":        lvl,
+        "energy":       0,
+        "energy_bonus": energy_bonus,   # energía extra por turno
+        "skills":       FIGURE_SKILLS.get(fig_key, FIGURE_SKILLS["gamer64"]),
+        "image":        fig.get("image", ""),
     }
     # Pasiva de Gamer64: revive una vez con el 80% de su HP máximo
     if fig_key == "gamer64":
@@ -606,7 +936,13 @@ class BattleState:
 
         # Equipos: lista de fighters
         self.p1_team = [make_fighter(k, next((f for f in p1_figs_data if f["key"]==k), {"level":1})) for k in p1_team_keys]
-        self.p2_team = [make_fighter(k, next((f for f in p2_figs_data if f["key"]==k), {"level":1})) for k in p2_team_keys]
+        self.p2_team = [make_fighter(
+            k,
+            next((f for f in p2_figs_data if f["key"]==k), {"level":1}),
+            hp_mult=next((f for f in p2_figs_data if f["key"]==k), {}).get("hp_mult", 1.0),
+            atk_mult=next((f for f in p2_figs_data if f["key"]==k), {}).get("atk_mult", 1.0),
+            energy_bonus=next((f for f in p2_figs_data if f["key"]==k), {}).get("energy_bonus", 0)
+        ) for k in p2_team_keys]
 
         self.p1_active = 0   # índice del luchador activo
         self.p2_active = 0
@@ -975,12 +1311,14 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
     if attacker.get("stun_turns", 0) > 0:
         attacker["stun_turns"] -= 1
         battle.log.append(f"😵 **{attacker['name']}** está aturdido y pierde su turno! ({attacker['stun_turns']} turnos restantes)")
+        # El turno VUELVE al rival (quien aturdo), no avanza
         battle.turn = 2 if battle.turn == 1 else 1
         await finish_turn(interaction, battle, channel_id)
         return
     elif attacker.get("stunned"):
         attacker["stunned"] = False
         battle.log.append(f"😵 **{attacker['name']}** está aturdido y pierde su turno!")
+        # El turno VUELVE al rival (quien aturdo), no avanza
         battle.turn = 2 if battle.turn == 1 else 1
         await finish_turn(interaction, battle, channel_id)
         return
@@ -1007,10 +1345,17 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         # Parry check
         if defender.get("parrying"):
             defender["parrying"] = False
-            pct = defender.get("parry_dmg_pct", 25)
-            counter_dmg = int(defender["max_hp"] * pct / 100)
-            attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
-            battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño!")
+            if defender.get("parry_flat_bonus") is not None:
+                # Alex: devuelve el daño recibido + flat bonus
+                counter_dmg = max(1, dmg + defender["parry_flat_bonus"])
+                defender.pop("parry_flat_bonus", None)
+                attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+                battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **PARRY** y devuelve **{counter_dmg}** daño (tu daño +10)!")
+            else:
+                pct = defender.get("parry_dmg_pct", 25)
+                counter_dmg = int(defender["max_hp"] * pct / 100)
+                attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+                battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño!")
     else:
         skill = attacker["skills"][skill_idx]
         if attacker["energy"] < skill["cost"]:
@@ -1064,6 +1409,11 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                     counter_dmg = max(1, dmg // 2)
                     attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
                     battle.log.append(f"   🦊 **{defender['emoji']} {defender['name']}** hace **COUNTER** y devuelve **{counter_dmg}** daño (mitad del recibido)!")
+                elif defender.get("parry_flat_bonus") is not None:
+                    counter_dmg = max(1, dmg + defender["parry_flat_bonus"])
+                    defender.pop("parry_flat_bonus", None)
+                    attacker["hp"] = max(0, attacker["hp"] - counter_dmg)
+                    battle.log.append(f"   ⚡ **{defender['emoji']} {defender['name']}** hace **PARRY** y devuelve **{counter_dmg}** daño (tu daño +10)!")
                 else:
                     pct = defender.get("parry_dmg_pct", 25)
                     counter_dmg = int(defender["max_hp"] * pct / 100)
@@ -1461,7 +1811,7 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                     attacker["ice_dagger_charges"] = ice_charges
                     if ice_charges >= 3:
                         attacker["ice_dagger_charges"] = 0
-                        ice_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 150)
+                        ice_dmg = 120  # daño fijo al 3er toque
                         defender["hp"] = max(0, defender["hp"] - ice_dmg)
                         battle.log.append(f"   🧊❄️ ¡ICE DAGGER CARGADA! **{ice_dmg}** daño masivo de hielo!")
                     else:
@@ -1472,8 +1822,9 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "consumed_fury":
-            # Mata a la figura activa enemiga + 15 splash + el impostor muere
-            defender["hp"] = 0
+            # 50 daño al activo + 15 splash + impostor pierde 50% vida
+            dmg_fury = 50
+            defender["hp"] = max(0, defender["hp"] - dmg_fury)
             def_team_fury = battle.p2_team if battle.turn == 1 else battle.p1_team
             splash = skill.get("splash_dmg", 15)
             hit = []
@@ -1481,12 +1832,14 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 if fig is not defender and fig["hp"] > 0:
                     fig["hp"] = max(0, fig["hp"] - splash)
                     hit.append(f"{fig['emoji']} {fig['name']} -{splash}HP")
-            attacker["hp"] = 0   # el impostor muere también
+            # El impostor pierde 50% de su vida en lugar de morir
+            self_dmg = max(1, attacker["max_hp"] // 2)
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
             battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
-            battle.log.append(f"   💀 **{defender['name']}** es eliminada instantáneamente!")
+            battle.log.append(f"   💥 **{defender['name']}** recibe **{dmg_fury}** daño!")
             if hit:
                 battle.log.append(f"   💥 Explosión: {' | '.join(hit)}")
-            battle.log.append(f"   💀 **{attacker['name']}** explota y cae también...")
+            battle.log.append(f"   😵 **{attacker['name']}** pierde el 50% de su vida por la explosión!")
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "lobster":
@@ -1529,7 +1882,11 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
         elif stype == "parry":
             # Alex — contraataca si el rival ataca en su siguiente turno
             attacker["parrying"] = True
-            attacker["parry_dmg_pct"] = skill.get("parry_dmg_pct", 25)
+            if "parry_flat_bonus" in skill:
+                attacker["parry_flat_bonus"] = skill["parry_flat_bonus"]
+                attacker.pop("parry_dmg_pct", None)
+            else:
+                attacker["parry_dmg_pct"] = skill.get("parry_dmg_pct", 25)
             battle.log.append(f"🛡️ **{attacker['emoji']} {attacker['name']}** se prepara para un **Parry**!")
             battle.log.append(f"   _{skill['desc']}_")
 
@@ -1573,6 +1930,286 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 else:
                     battle.log.append(f"🔥 **{attacker['emoji']} {attacker['name']}** intenta encender el mechero...")
                     battle.log.append(f"   💨 ...no funciona. (Como siempre)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "clone_switch":
+            # 007n7 — cambia tipo de clon
+            types = ["def", "atk", "heal"]
+            current = attacker.get("clone_type", "def")
+            idx = types.index(current)
+            nxt = types[(idx + 1) % 3]
+            attacker["clone_type"] = nxt
+            labels = {"def": "🛡️ DEF (bloquea 2 golpes)", "atk": "⚔️ ATK (parry mitad del daño)", "heal": "💚 HEAL (cura según daño recibido)"}
+            battle.log.append(f"🔄 **{attacker['emoji']} {attacker['name']}** cambia tipo de clon → **{labels[nxt]}**!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "clone_action":
+            # 007n7 — ejecuta según tipo activo
+            ctype = attacker.get("clone_type", "def")
+            if ctype == "def":
+                attacker["clone_shield"] = 2
+                battle.log.append(f"🍔 **{attacker['emoji']} {attacker['name']}** invoca un **Clon DEF**: ¡absorberá los próximos 2 golpes!")
+            elif ctype == "atk":
+                attacker["parrying"] = True
+                attacker["parry_return_half"] = True
+                battle.log.append(f"🍔 **{attacker['emoji']} {attacker['name']}** invoca un **Clon ATK**: ¡hará parry devolviendo mitad del daño!")
+            elif ctype == "heal":
+                attacker["clone_heal_on_hit"] = True
+                battle.log.append(f"🍔 **{attacker['emoji']} {attacker['name']}** invoca un **Clon HEAL**: ¡se curará según el daño del próximo golpe!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "teleport_007":
+            # 007n7 — se teletransporta, cede turnos, se cura 10/turno
+            attacker["teleporting"] = True
+            attacker["teleport_heals"] = 10
+            battle.log.append(f"🌀 **{attacker['emoji']} {attacker['name']}** se **teletransporta** lejos, cediendo sus turnos!")
+            battle.log.append(f"   Se curará 10 HP por turno hasta tener vida completa.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "fling_brick":
+            # c00lkidd — daño + reduce ATK rival, 20% fuerza cambio
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            atk_reduction = 5
+            defender["atk"] = max(1, defender.get("atk", 10) - atk_reduction)
+            battle.log.append(f"🧱 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño! ATK rival -{atk_reduction}!")
+            if random.randint(1, 100) <= 20:
+                def_team = battle.p2_team if battle.turn == 1 else battle.p1_team
+                def_idx_attr = "p2_active" if battle.turn == 1 else "p1_active"
+                current_idx = getattr(battle, def_idx_attr)
+                next_idx = battle.next_alive(def_team, current_idx)
+                if next_idx is not None and next_idx != current_idx:
+                    setattr(battle, def_idx_attr, next_idx)
+                    battle.log.append(f"   💥 ¡El ladrillo manda a volar a **{defender['name']}**! Entra **{def_team[next_idx]['emoji']} {def_team[next_idx]['name']}**!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "minion_shield":
+            # c00lkidd — escudo de 2 golpes con contraataque
+            attacker["minion_shield"] = 2
+            battle.log.append(f"😎 **{attacker['emoji']} {attacker['name']}** invoca sus **Minions**: ¡escudo de 2 golpes!")
+            battle.log.append(f"   Si el rival ataca, recibirá 10 daño + quemadura!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "backstab":
+            # Two Time — daño + stun + recarga barra
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            battle.log.append(f"🗡️ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño!")
+            if not defender.get("stun_immune"):
+                defender["stunned"] = True
+                battle.log.append(f"   😵 ¡**{defender['name']}** queda aturdido 1 turno!")
+            bonus_bar = skill.get("bar_bonus", 20)
+            attacker["energy"] = min(100, attacker["energy"] + bonus_bar)
+            battle.log.append(f"   ⚡ **{attacker['name']}** recarga +{bonus_bar} energía!")
+            # Contar backstabs para pasiva de revive
+            attacker["backstab_count"] = attacker.get("backstab_count", 0) + 1
+            if attacker.get("spawnpoint_active") and attacker["backstab_count"] >= 4 and attacker["energy"] >= 100:
+                attacker["can_revive"] = True
+                battle.log.append(f"   ⚡ ¡**{attacker['name']}** ha acumulado 4 backstabs con barra llena! **¡Pasiva de Respawn lista!**")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "spawnpoint":
+            # Two Time — coloca punto de respawn
+            attacker["spawnpoint_active"] = True
+            attacker["backstab_count"] = attacker.get("backstab_count", 0)
+            battle.log.append(f"🗡️ **{attacker['emoji']} {attacker['name']}** clava su daga y coloca un **Spawnpoint**!")
+            battle.log.append(f"   Pasiva activa: 4 Backstabs con barra llena = revive con 50% HP.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "crouch":
+            # Two Time — se agacha: reduce daño recibido, buff ATK 2 turnos
+            attacker["crouching"] = True
+            attacker["atk_buff"] = attacker.get("atk_buff", 0) + 15
+            battle.log.append(f"🗡️ **{attacker['emoji']} {attacker['name']}** se agacha (menos daño recibido este turno, +15 ATK por 2 turnos)!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "voidstar":
+            # Noli — daño + prepara próximo ataque para +15
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            attacker["voidstar_charged"] = True
+            battle.log.append(f"✨ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño! ¡Próximo ataque +15!")
+            # Pasiva de alucinaciones: 20% de que rival falle
+            if attacker.get("key") == "noli" or attacker.get("hallucination_aura"):
+                defender["hallucinated"] = True
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "voidrush":
+            # Noli — daño, +15 si rival tiene alucinaciones
+            bonus = 15 if defender.get("hallucinated") else 0
+            total_power = skill["power"] + bonus
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], total_power)
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            bonus_txt = f" (¡+15 Alucinaciones!)" if bonus else ""
+            battle.log.append(f"✨ **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**{bonus_txt} → **{dmg}** daño!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "observant":
+            # Noli — desaparece 5 turnos, genera alucinaciones
+            attacker["observant_turns"] = 5
+            attacker["observant_dmg_ready"] = False
+            defender["hallucinated"] = True
+            battle.log.append(f"✨ **{attacker['emoji']} {attacker['name']}** **desaparece** entre alucinaciones por 5 turnos!")
+            battle.log.append(f"   🌀 El rival queda alucinado. Al volver, Noli hará daño masivo.")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "guest_block":
+            # Guest1337 — bloquea próximo ataque + gana carga
+            attacker["blocking"] = True
+            attacker["punch_charges"] = attacker.get("punch_charges", 0) + 1
+            battle.log.append(f"👊 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**: ¡bloqueará el próximo ataque!")
+            battle.log.append(f"   Cargas de Punch: {attacker['punch_charges']}")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "guest_punch":
+            # Guest1337 — requiere carga, 55 daño + stun 2 turnos
+            if not attacker.get("punch_charges", 0) > 0:
+                battle.log.append(f"❌ **{attacker['name']}**: ¡Necesitas una carga de **Block** para usar Punch!")
+            else:
+                attacker["punch_charges"] -= 1
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                stun_t = skill.get("stun_turns", 2)
+                defender["stun_turns"] = stun_t
+                battle.log.append(f"👊 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño! ¡Stun {stun_t} turnos!")
+                battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "bloxy_cola":
+            # Noob — +15 energía extra por turno por 2 turnos
+            attacker["energy_bonus_temp"] = attacker.get("energy_bonus_temp", 0) + 15
+            attacker["energy_bonus_turns"] = 2
+            battle.log.append(f"😃 **{attacker['emoji']} {attacker['name']}** bebe la **Bloxy Cola**: +15 energía/turno por 2 turnos!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "slateskin":
+            # Noob — próximo golpe recibido: mitad daño + devuelve mitad
+            attacker["slateskin"] = True
+            battle.log.append(f"😃 **{attacker['emoji']} {attacker['name']}** toma la **Slateskin**: ¡el próximo ataque hará mitad del daño y lo devolverá!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "ghostburger":
+            # Noob — evasión aumentada + 10 HP/turno por 4 turnos
+            attacker["ghostburger_turns"] = 4
+            attacker["evade_chance"] = attacker.get("evade_chance", 0) + 30
+            battle.log.append(f"😃 **{attacker['emoji']} {attacker['name']}** come la **GhostBurger**: ¡+30% evasión y se curará 10 HP/turno x4!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "coin_flip":
+            # Chance — cara = carga, sello = rival hace más daño
+            roll = random.randint(1, 2)
+            if roll == 1:
+                charges = min(3, attacker.get("coin_charges", 0) + 1)
+                attacker["coin_charges"] = charges
+                battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** gira la moneda → **¡CARA!** Cargas: {charges}/3")
+            else:
+                attacker["coin_debuff"] = True
+                battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** gira la moneda → **SELLO**. El próximo ataque le hará más daño!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "gun_shot":
+            # Chance — dispara con prob según cargas
+            charges = attacker.get("coin_charges", 0)
+            if charges == 0:
+                battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** intenta disparar... sin cargas. ¡Nada!")
+            else:
+                prob = {1: 40, 2: 70, 3: 100}.get(charges, 40)
+                roll = random.randint(1, 100)
+                if roll <= prob:
+                    attacker["coin_charges"] = 0
+                    dmg = battle.calc_damage(attacker["atk"], defender["defense"], 60)
+                    defender["hp"] = max(0, defender["hp"] - dmg)
+                    stun_t = 2
+                    defender["stun_turns"] = stun_t
+                    battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** **DISPARA** → **{dmg}** daño! ¡Stun {stun_t} turnos! ({prob}% probabilidad)")
+                elif charges < 3 and random.randint(1, 100) <= 30:
+                    attacker["coin_charges"] = 0
+                    self_dmg = 20
+                    attacker["hp"] = max(1, attacker["hp"] - self_dmg)
+                    battle.log.append(f"💥 **¡La pistola de {attacker['name']} explotó en su cara!** -{self_dmg} HP!")
+                else:
+                    battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** dispara... ¡Falla! ({100-prob}% sin disparo)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "reload_stats":
+            # Chance — cambia su vida aleatoriamente
+            new_hp = random.randint(150, 250)
+            old_hp = attacker["hp"]
+            attacker["max_hp"] = new_hp
+            attacker["hp"] = min(attacker["hp"], new_hp) if attacker["hp"] > new_hp else new_hp
+            attacker["coin_charges"] = 0  # también recarga el revólver
+            battle.log.append(f"🔫 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   ¡Nueva vida máxima: **{new_hp}** HP! (tenía {old_hp}) ¡Revólver recargado!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "spikes":
+            # John Doe — daño + bloquea 2 ataques + John pierde 20 HP
+            self_cost = 20
+            attacker["hp"] = max(1, attacker["hp"] - self_cost)
+            dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            attacker["spike_shield"] = 2
+            battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** → **{dmg}** daño + escudo 2 golpes! (-{self_cost} HP propio)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "error404":
+            # John Doe — -10 HP propio, barra llena, +20 ATK 4 turnos
+            self_cost = 10
+            attacker["hp"] = max(1, attacker["hp"] - self_cost)
+            attacker["energy"] = 100
+            attacker["atk_buff_turns"] = 4
+            attacker["atk_buff_amount"] = 20
+            attacker["atk"] = attacker["atk"] + 20
+            battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}** (-{self_cost} HP)!")
+            battle.log.append(f"   ⚡ ¡Barra llena! +20 ATK por 4 turnos!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "traps":
+            # John Doe — requiere 3 usos
+            charges = attacker.get("trap_charges", 0) + 1
+            attacker["trap_charges"] = charges
+            if charges >= 3:
+                attacker["trap_charges"] = 0
+                if "dots" not in defender: defender["dots"] = []
+                for _ in range(3):
+                    defender["dots"].append({"dmg": 20, "turns": 1})
+                battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** activa la **TRAMPA**! ¡20 daño/turno x3!")
+            else:
+                battle.log.append(f"💢 **{attacker['emoji']} {attacker['name']}** coloca una trampa... ({charges}/3)")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "crystal_switch":
+            # Jane Doe — cambia tipo de cristal
+            current = attacker.get("crystal_type", "damage")
+            nxt = "heal" if current == "damage" else "damage"
+            attacker["crystal_type"] = nxt
+            labels = {"damage": "⚔️ DAÑO (stun + 20 daño)", "heal": "💚 CURACIÓN (cura aliado con menos HP + inmunidad)"}
+            battle.log.append(f"🪓 **{attacker['emoji']} {attacker['name']}** cambia cristal → **{labels[nxt]}**!")
+            battle.log.append(f"   _{skill['desc']}_")
+
+        elif stype == "crystal_throw":
+            # Jane Doe — ejecuta según tipo activo
+            ctype = attacker.get("crystal_type", "damage")
+            if ctype == "damage":
+                dmg = battle.calc_damage(attacker["atk"], defender["defense"], skill["power"])
+                defender["hp"] = max(0, defender["hp"] - dmg)
+                defender["stun_turns"] = 3
+                battle.log.append(f"🪓 **{attacker['emoji']} {attacker['name']}** lanza **Cristal de Daño** → **{dmg}** daño + stun 3 turnos!")
+                # Pasiva Resonancia
+                defender["resonance"] = defender.get("resonance", 0) + 1
+                res = defender["resonance"]
+                defender["atk"] = max(1, defender["atk"] - 3)
+                battle.log.append(f"   💜 Resonancia x{res}: ATK rival -3, daño recibido aumentado!")
+            else:
+                # Cura al aliado con menos HP
+                ally_team = atk_team
+                weakest = min((f for f in ally_team if f["hp"] > 0), key=lambda f: f["hp"], default=None)
+                if weakest:
+                    heal_amt = 20
+                    weakest["hp"] = min(weakest["max_hp"], weakest["hp"] + heal_amt)
+                    weakest["immune_turns"] = 3
+                    battle.log.append(f"🪓 **{attacker['emoji']} {attacker['name']}** lanza **Cristal de Curación** → **{weakest['emoji']} {weakest['name']}** +{heal_amt} HP + inmunidad 3 turnos!")
+                else:
+                    battle.log.append(f"🪓 No hay aliados que curar.")
             battle.log.append(f"   _{skill['desc']}_")
 
     # ¿Cayó el defensor?
@@ -1848,7 +2485,7 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
                     attacker["ice_dagger_charges"] = ice_charges
                     if ice_charges >= 3:
                         attacker["ice_dagger_charges"] = 0
-                        ice_dmg = battle.calc_damage(attacker["atk"], defender["defense"], 150)
+                        ice_dmg = 120  # daño fijo al 3er toque
                         defender["hp"] = max(0, defender["hp"] - ice_dmg)
                         battle.log.append(f"   🧊❄️ ¡ICE DAGGER CARGADA! **{ice_dmg}** daño masivo de hielo!")
                     else:
@@ -1859,8 +2496,9 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "consumed_fury":
-            # Mata a la figura activa enemiga + 15 splash + el impostor muere
-            defender["hp"] = 0
+            # 50 daño al activo + 15 splash + impostor pierde 50% vida
+            dmg_fury = 50
+            defender["hp"] = max(0, defender["hp"] - dmg_fury)
             def_team_fury = battle.p2_team if battle.turn == 1 else battle.p1_team
             splash = skill.get("splash_dmg", 15)
             hit = []
@@ -1868,12 +2506,14 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
                 if fig is not defender and fig["hp"] > 0:
                     fig["hp"] = max(0, fig["hp"] - splash)
                     hit.append(f"{fig['emoji']} {fig['name']} -{splash}HP")
-            attacker["hp"] = 0   # el impostor muere también
+            # El impostor pierde 50% de su vida en lugar de morir
+            self_dmg = max(1, attacker["max_hp"] // 2)
+            attacker["hp"] = max(1, attacker["hp"] - self_dmg)
             battle.log.append(f"💥 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
-            battle.log.append(f"   💀 **{defender['name']}** es eliminada instantáneamente!")
+            battle.log.append(f"   💥 **{defender['name']}** recibe **{dmg_fury}** daño!")
             if hit:
                 battle.log.append(f"   💥 Explosión: {' | '.join(hit)}")
-            battle.log.append(f"   💀 **{attacker['name']}** explota y cae también...")
+            battle.log.append(f"   😵 **{attacker['name']}** pierde el 50% de su vida por la explosión!")
             battle.log.append(f"   _{skill['desc']}_")
 
         elif stype == "lobster":
@@ -1909,7 +2549,7 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
 
     if chosen_idx is None:
         # Ataque básico — siempre disponible, gana 20 energía
-        f["energy"] = min(ENERGY_MAX, f["energy"] + ENERGY_PER_TURN)
+        f["energy"] = min(ENERGY_MAX, f["energy"] + ENERGY_PER_TURN + f.get("energy_bonus", 0))
         bonus_atk = f.pop("atk_buff", 0)
         max_power = max((sk.get("power", 0) for sk in f["skills"]), default=20)
         base_dmg = max(1, round(max_power / 2))
@@ -2014,6 +2654,15 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
 
     save_db(db)
     embed.add_field(name="💰 Recompensas", value=f"Ganador: +{COINS_WIN}🪙 +{XP_PER_WIN}XP | Perdedor: +{COINS_LOSS}🪙", inline=False)
+
+    # Dar ingrediente al ganador si tiene suerte
+    if random.randint(1, 100) <= BATTLE_INGREDIENT_DROP_CHANCE:
+        db2 = load_db()
+        winner_data2 = get_user(db2, winner_id)
+        if winner_data2:
+            ing = give_battle_ingredient(winner_data2)
+            save_db(db2)
+            embed.add_field(name="🧑‍🍳 ¡Ingrediente encontrado!", value=f"¡Conseguiste {ing} **{INGREDIENTS.get(ing, '')}** para cocinar!", inline=False)
 
     if channel_id in active_battles:
         del active_battles[channel_id]
@@ -2490,6 +3139,7 @@ BOT_ROSTER = [
         "difficulty": 1,
         "team": ["agustoloco", "agustoloco", "agustoloco"],
         "level": 1,
+        "hp_mult": 1.0, "atk_mult": 1.0, "energy_bonus": 0,
         "reward_coins": 80,
         "reward_xp": 30,
     },
@@ -2500,6 +3150,7 @@ BOT_ROSTER = [
         "difficulty": 2,
         "team": ["gamer64", "agustoloco", "agustoloco"],
         "level": 3,
+        "hp_mult": 1.1, "atk_mult": 1.1, "energy_bonus": 0,
         "reward_coins": 150,
         "reward_xp": 60,
     },
@@ -2510,6 +3161,7 @@ BOT_ROSTER = [
         "difficulty": 3,
         "team": ["sonic", "gamer64", "agustoloco"],
         "level": 6,
+        "hp_mult": 1.2, "atk_mult": 1.2, "energy_bonus": 5,
         "reward_coins": 250,
         "reward_xp": 100,
     },
@@ -2520,20 +3172,146 @@ BOT_ROSTER = [
         "difficulty": 4,
         "team": ["sonic", "alex", "gamer64"],
         "level": 10,
+        "hp_mult": 1.4, "atk_mult": 1.3, "energy_bonus": 8,
         "reward_coins": 400,
         "reward_xp": 150,
+    },
+    {
+        "id": "nino_random",
+        "name": "👦 Niño Random",
+        "desc": "No sabes su nombre. No sabe el tuyo. Pero está MUY enojado.",
+        "difficulty": 5,
+        "team": ["boss_nino1", "boss_nino2", "boss_nino3"],
+        "level": 13,
+        "hp_mult": 1.5, "atk_mult": 1.4, "energy_bonus": 10,
+        "reward_coins": 550,
+        "reward_xp": 200,
+        "is_boss": True,
+    },
+    {
+        "id": "paper_mario",
+        "name": "📄 Paper Mario",
+        "desc": "Es delgado como papel pero golpea como un libro de texto.",
+        "difficulty": 6,
+        "team": ["boss_paper1", "boss_paper2", "boss_paper3"],
+        "level": 15,
+        "hp_mult": 1.6, "atk_mult": 1.5, "energy_bonus": 12,
+        "reward_coins": 700,
+        "reward_xp": 280,
+        "is_boss": True,
+    },
+    {
+        "id": "steve",
+        "name": "⛏️ Steve",
+        "desc": "Lleva sobreviviendo desde el 2011. Ha visto cosas que tú no puedes imaginar.",
+        "difficulty": 7,
+        "team": ["boss_steve1", "boss_steve2", "boss_steve3"],
+        "level": 17,
+        "hp_mult": 1.8, "atk_mult": 1.6, "energy_bonus": 15,
+        "reward_coins": 850,
+        "reward_xp": 350,
+        "is_boss": True,
+    },
+    {
+        "id": "impostor_negro",
+        "name": "🔪 Impostor Negro",
+        "desc": "El mismo que conoces, pero entrenado para matar. Sus movimientos son letales.",
+        "difficulty": 8,
+        "team": ["boss_impostor1", "boss_impostor2", "blackout"],
+        "level": 19,
+        "hp_mult": 2.0, "atk_mult": 1.8, "energy_bonus": 18,
+        "reward_coins": 950,
+        "reward_xp": 420,
+        "is_boss": True,
     },
     {
         "id": "jefe",
         "name": "💀 El Antifas Antifasado",
         "desc": "El jefe supremo. Nadie sabe de dónde vino. Sus figuras no se consiguen en la tienda.",
-        "difficulty": 5,
+        "difficulty": 9,
         "team": ["antifas", "roblox_boss", "gamer64"],
         "level": 20,
-        "reward_coins": 1000,
-        "reward_xp": 500,
+        "hp_mult": 2.2, "atk_mult": 2.0, "energy_bonus": 20,
+        "reward_coins": 1500,
+        "reward_xp": 600,
         "is_boss": True,
     },
+]
+
+# ── Figuras exclusivas de los nuevos jefes ────────────────────────────────────
+
+# Niño Random
+FIGURES["boss_nino1"] = {"name":"Niño Enfadado","emoji":"😡","rarity":"legendario","price":0,"hp":200,"attack":38,"defense":20,"speed":40,"image":""}
+FIGURES["boss_nino2"] = {"name":"Niño con Palo","emoji":"🏏","rarity":"legendario","price":0,"hp":180,"attack":45,"defense":15,"speed":35,"image":""}
+FIGURES["boss_nino3"] = {"name":"Niño Llorón","emoji":"😭","rarity":"legendario","price":0,"hp":160,"attack":30,"defense":25,"speed":30,"image":""}
+FIGURE_SKILLS["boss_nino1"] = [
+    {"name":"Rabieta",       "cost":30, "type":"damage",       "power":25, "stun":True,  "desc":"El niño hace una rabieta y golpea al rival aturdido."},
+    {"name":"QUIERO ESO YA","cost":60, "type":"team_atk_buff", "power":0,  "atk_buff":20,"desc":"Exige lo que quiere — todo el equipo gana +20 ATK."},
+    {"name":"¡ME LO DICES A MÍ!","cost":100,"type":"damage",  "power":70, "aoe":True,"aoe_secondary_power":40,"desc":"Explota de furia y golpea a todo el equipo rival."},
+]
+FIGURE_SKILLS["boss_nino2"] = [
+    {"name":"Palazo",        "cost":30, "type":"damage",  "power":30, "desc":"Un palazo directo sin contemplaciones."},
+    {"name":"Palazo x2",     "cost":60, "type":"damage",  "power":55, "aoe":True,"aoe_secondary_power":25,"desc":"Gira el palo y golpea a todos los rivales."},
+    {"name":"SUPER PALAZO",  "cost":100,"type":"damage",  "power":85, "stun":True,"stun_turns":2,"desc":"Un golpe devastador que aturde 2 turnos."},
+]
+FIGURE_SKILLS["boss_nino3"] = [
+    {"name":"Llanto",        "cost":30, "type":"heal",         "power":40, "team_heal":True,"team_heal_power":20,"desc":"Sus lágrimas curan al equipo."},
+    {"name":"Llamar a Mamá", "cost":60, "type":"team_atk_buff","power":0,  "atk_buff":15,  "desc":"Llama a mamá — el equipo se motiva con +15 ATK."},
+    {"name":"Berrinche Total","cost":100,"type":"dot",         "power":15,"dot_turns":4,   "desc":"Berrinche imparable: 15 daño/turno x4 al rival."},
+]
+
+# Paper Mario
+FIGURES["boss_paper1"] = {"name":"Paper Mario","emoji":"📄","rarity":"legendario","price":0,"hp":220,"attack":42,"defense":35,"speed":38,"image":""}
+FIGURES["boss_paper2"] = {"name":"Paper Bowser","emoji":"🐢","rarity":"legendario","price":0,"hp":280,"attack":50,"defense":45,"speed":20,"image":""}
+FIGURES["boss_paper3"] = {"name":"Paper Peach","emoji":"👸","rarity":"legendario","price":0,"hp":190,"attack":35,"defense":30,"speed":42,"image":""}
+FIGURE_SKILLS["boss_paper1"] = [
+    {"name":"Martillo de Papel","cost":30,"type":"damage",  "power":28, "desc":"Saca su martillo de papel y golpea."},
+    {"name":"Estrella de Papel","cost":60,"type":"heal",    "power":50, "team_heal":True,"team_heal_power":25,"desc":"Una estrella de papel cura a todo el equipo."},
+    {"name":"Modo Ultrahammer", "cost":100,"type":"damage", "power":90, "stun":True,"desc":"El martillo definitivo que aplasta todo."},
+]
+FIGURE_SKILLS["boss_paper2"] = [
+    {"name":"Lanzallamas",   "cost":30,"type":"damage","power":32,"aoe":True,"aoe_secondary_power":18,"desc":"Escupe fuego a todos los rivales."},
+    {"name":"Koopa Shell",   "cost":60,"type":"damage","power":50,"force_switch":True,"force_switch_turns":2,"desc":"Lanza su caparazón que bloquea a una figura 2 turnos."},
+    {"name":"BOWSER PAPER FURY","cost":100,"type":"damage","power":100,"desc":"La ira definitiva de Bowser en formato papel."},
+]
+FIGURE_SKILLS["boss_paper3"] = [
+    {"name":"Bofetada Real", "cost":30,"type":"damage","power":22,"stun":True,"desc":"Una bofetada elegante que aturde al rival."},
+    {"name":"Curación Real", "cost":60,"type":"heal",  "power":60,"team_heal":True,"team_heal_power":30,"desc":"Peach cura generosamente a todo el equipo."},
+    {"name":"Parasol Real",  "cost":100,"type":"retribution","power":0,"desc":"El parasol devuelve la mitad del daño recibido."},
+]
+
+# Steve
+FIGURES["boss_steve1"] = {"name":"Steve","emoji":"⛏️","rarity":"legendario","price":0,"hp":300,"attack":48,"defense":50,"speed":25,"image":""}
+FIGURES["boss_steve2"] = {"name":"Creeper","emoji":"💚","rarity":"legendario","price":0,"hp":200,"attack":55,"defense":20,"speed":30,"image":""}
+FIGURES["boss_steve3"] = {"name":"Enderman","emoji":"🌑","rarity":"legendario","price":0,"hp":250,"attack":45,"defense":35,"speed":45,"image":""}
+FIGURE_SKILLS["boss_steve1"] = [
+    {"name":"Picar con Pico", "cost":30,"type":"damage",       "power":30, "desc":"Steve pica con su pico de diamante."},
+    {"name":"Crafting Rápido","cost":60,"type":"team_atk_buff","power":0,"atk_buff":20,"desc":"Steve craftea armas para todo el equipo: +20 ATK."},
+    {"name":"TNT",            "cost":100,"type":"damage",      "power":80,"aoe":True,"aoe_secondary_power":50,"desc":"Steve coloca TNT y vuela a todo el equipo rival."},
+]
+FIGURE_SKILLS["boss_steve2"] = [
+    {"name":"Sssss...",       "cost":30,"type":"dot",     "power":12,"dot_turns":3,"desc":"El Creeper empieza a sisear... 12 daño/turno x3."},
+    {"name":"¡BOOM!",         "cost":60,"type":"damage",  "power":70,"aoe":True,"aoe_secondary_power":40,"desc":"EXPLOTA haciendo daño masivo a todo el equipo."},
+    {"name":"Mega Explosión", "cost":100,"type":"consumed_fury","power":0,"splash_dmg":30,"desc":"La explosión más grande que has visto. Mata al activo + 30 splash."},
+]
+FIGURE_SKILLS["boss_steve3"] = [
+    {"name":"Teletransporte", "cost":30,"type":"damage",  "power":25,"stun":True,"desc":"Aparece detrás del rival y golpea."},
+    {"name":"Bloque de Ender","cost":60,"type":"parry",   "power":0,"parry_dmg_pct":35,"desc":"Bloquea el ataque y contraataca con el 35% del HP rival."},
+    {"name":"Ojos de Ender",  "cost":100,"type":"damage", "power":90,"force_switch":True,"force_switch_turns":3,"desc":"Sus ojos lanzan un rayo que bloquea a la figura 3 turnos."},
+]
+
+# Impostor Negro (jefe)
+FIGURES["boss_impostor1"] = {"name":"Impostor Rojo","emoji":"🔴","rarity":"legendario","price":0,"hp":240,"attack":50,"defense":30,"speed":35,"image":""}
+FIGURES["boss_impostor2"] = {"name":"Impostor Blanco","emoji":"⚪","rarity":"legendario","price":0,"hp":220,"attack":45,"defense":35,"speed":40,"image":""}
+FIGURE_SKILLS["boss_impostor1"] = [
+    {"name":"Ventilación",   "cost":30,"type":"damage",  "power":35,"desc":"Se escapa por el ventilador y aparece detrás del rival."},
+    {"name":"Sabotaje",      "cost":60,"type":"dot",     "power":12,"dot_turns":4,"desc":"Sabotea el sistema: 12 daño/turno x4."},
+    {"name":"Emergency Meeting","cost":100,"type":"damage","power":80,"aoe":True,"aoe_secondary_power":45,"desc":"Llama a una reunión de emergencia y ataca a todos."},
+]
+FIGURE_SKILLS["boss_impostor2"] = [
+    {"name":"Cuchillo Veloz","cost":30,"type":"damage",  "power":32,"stun":True,"desc":"Lanza su cuchillo y aturde al rival."},
+    {"name":"Fake Task",     "cost":60,"type":"buff",    "power":0,"atk_buff":25,"desc":"Finge hacer una tarea para preparar un golpe masivo."},
+    {"name":"Sus",           "cost":100,"type":"damage", "power":85,"force_switch":True,"force_switch_turns":2,"desc":"El clásico. Elimina a la figura activa y la bloquea 2 turnos."},
 ]
 
 # Figuras exclusivas del jefe (versiones potenciadas)
@@ -2700,9 +3478,12 @@ def make_bot_fight_callback(bot_data, user, user_discord_id):
             p1_keys.append(owned[0]["key"])
             p1_figs_data.append(owned[0])
 
-        bot_level = bot_data["level"]
+        bot_level  = bot_data["level"]
+        hp_mult    = bot_data.get("hp_mult", 1.0)
+        atk_mult   = bot_data.get("atk_mult", 1.0)
+        nrg_bonus  = bot_data.get("energy_bonus", 0)
         p2_keys = bot_data["team"]
-        p2_figs_data = [{"key": k, "level": bot_level, "xp": 0} for k in p2_keys]
+        p2_figs_data = [{"key": k, "level": bot_level, "xp": 0, "hp_mult": hp_mult, "atk_mult": atk_mult, "energy_bonus": nrg_bonus} for k in p2_keys]
 
         battle = BattleState(
             p1_id=inter.user.id,
@@ -3070,6 +3851,7 @@ async def ayuda(interaction: discord.Interaction):
     embed.add_field(name="🏆 Ranking", value="`/ranking` — Top 10 del servidor", inline=False)
     embed.add_field(name="📅 Diario", value="`/diario` — Reclama monedas diarias y mantén tu racha!", inline=False)
     embed.add_field(name="💰 Admin", value="`/oro @usuario cantidad` — Regala monedas a un usuario [Solo admins]", inline=False)
+    embed.add_field(name="🧑‍🍳 Cocina", value="`/cook` — Cocina con una langosta + hasta 3 ingredientes para conseguir buffs!\n`/ingredientes` — Ve tu despensa de ingredientes", inline=False)
     embed.set_footer(text="¡Colecciona, mejora y conquista la arena!")
     await interaction.response.send_message(embed=embed)
 
@@ -3110,36 +3892,790 @@ async def lobster_cmd(interaction: discord.Interaction):
     embed.set_footer(text="Úsala con /equipar. Buena suerte.")
     await interaction.response.send_message(embed=embed)
 
-# --- ORO (ADMIN) ---
-@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
+# --- ORO (solo matheogamer64) ---
+@bot.tree.command(name="oro", description="[MATHEO] Regala monedas a un usuario")
 @app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
 async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
-    # Verificar que el autor tiene permisos de administrador
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ Solo los administradores pueden usar este comando.", ephemeral=True)
+    if interaction.user.id != MATHEO_ID:
+        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     if cantidad <= 0:
         await interaction.response.send_message("❌ La cantidad debe ser mayor a 0.", ephemeral=True)
         return
-
     db = load_db()
     target = get_user(db, usuario.id)
     if not target:
-        await interaction.response.send_message(f"❌ {usuario.mention} no está registrado en el bot.", ephemeral=True)
+        await interaction.response.send_message(f"❌ {usuario.mention} no está registrado.", ephemeral=True)
         return
-
     target["coins"] = target.get("coins", 0) + cantidad
     save_db(db)
-
-    embed = discord.Embed(
-        title="💰 ¡Monedas regaladas!",
-        color=0xf1c40f
-    )
+    embed = discord.Embed(title="💰 ¡Monedas regaladas!", color=0xf1c40f)
     embed.add_field(name="👤 Receptor", value=f"{target['name']} ({usuario.mention})", inline=True)
     embed.add_field(name="💰 Cantidad", value=f"+**{cantidad:,}** monedas", inline=True)
     embed.add_field(name="💳 Nuevo saldo", value=f"**{target['coins']:,}** monedas", inline=True)
     embed.set_footer(text=f"Otorgado por {interaction.user.display_name}")
     await interaction.response.send_message(embed=embed)
+# ============================================================
+#  ID EXCLUSIVO DE MATHEOGAMER64
+# ============================================================
+MATHEO_ID = 357067563842297857  # ← Cambia esto al ID real de matheogamer64
+
+# --- RESET (cualquier usuario, solo afecta su canal) ---
+@bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
+async def reset_battle(interaction: discord.Interaction):
+    if interaction.channel_id in active_battles:
+        del active_battles[interaction.channel_id]
+        embed = discord.Embed(
+            title="🔄 Batalla reiniciada",
+            description="La batalla activa en este canal ha sido cancelada. ¡Podéis iniciar una nueva!",
+            color=0x3498db
+        )
+        await interaction.response.send_message(embed=embed)
+    else:
+        await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
+
+# --- BOMB (solo matheogamer64) ---
+@bot.tree.command(name="bomb", description="[MATHEO] Quita monedas a un usuario")
+@app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
+async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
+    if interaction.user.id != MATHEO_ID:
+        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
+        return
+    db = load_db()
+    target = get_user(db, usuario.id)
+    if not target:
+        await interaction.response.send_message("❌ Usuario no registrado.", ephemeral=True)
+        return
+    if cantidad <= 0:
+        await interaction.response.send_message("❌ La cantidad debe ser mayor a 0.", ephemeral=True)
+        return
+    before = target.get("coins", 0)
+    target["coins"] = max(0, before - cantidad)
+    save_db(db)
+    embed = discord.Embed(title="💣 ¡BOOM!", color=0xe74c3c)
+    embed.add_field(name="👤 Usuario", value=target["name"], inline=True)
+    embed.add_field(name="💸 Monedas eliminadas", value=f"-**{cantidad:,}**", inline=True)
+    embed.add_field(name="💳 Saldo restante", value=f"**{target['coins']:,}**", inline=True)
+    await interaction.response.send_message(embed=embed)
+
+# --- NUKE (solo matheogamer64) ---
+@bot.tree.command(name="nuke", description="[MATHEO] Resetea a un usuario a nivel 1")
+@app_commands.describe(usuario="Usuario a nukear")
+async def nuke(interaction: discord.Interaction, usuario: discord.Member):
+    if interaction.user.id != MATHEO_ID:
+        await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
+        return
+    db = load_db()
+    target = get_user(db, usuario.id)
+    if not target:
+        await interaction.response.send_message("❌ Usuario no registrado.", ephemeral=True)
+        return
+    nombre = target["name"]
+    target["coins"]   = 0
+    target["figures"] = []
+    target["team"]    = [None, None, None]
+    target["level"]   = 1
+    target["xp"]      = 0
+    target["wins"]    = 0
+    target["losses"]  = 0
+    save_db(db)
+    embed = discord.Embed(
+        title="☢️ NUKE ACTIVADO",
+        description=f"**{nombre}** ha sido reseteado a nivel 1.\nSin monedas. Sin figuras. Sin nada.",
+        color=0xff0000
+    )
+    embed.set_footer(text="F en el chat")
+    await interaction.response.send_message(embed=embed)
+
+# --- ROB ---
+ROB_COOLDOWN = {}  # {user_id: timestamp}
+
+@bot.tree.command(name="rob", description="Intenta robarle monedas a otro usuario")
+@app_commands.describe(usuario="Usuario al que intentar robar")
+async def rob(interaction: discord.Interaction, usuario: discord.Member):
+    if usuario.id == interaction.user.id:
+        await interaction.response.send_message("❌ No puedes robarte a ti mismo.", ephemeral=True)
+        return
+
+    now = datetime.now(timezone.utc).timestamp()
+    cd_key = interaction.user.id
+    if cd_key in ROB_COOLDOWN:
+        diff = now - ROB_COOLDOWN[cd_key]
+        if diff < 7200:  # 2 horas
+            restante = int(7200 - diff)
+            h = restante // 3600
+            m = (restante % 3600) // 60
+            await interaction.response.send_message(
+                f"⏰ Cooldown activo. Puedes robar de nuevo en **{h}h {m}m**.", ephemeral=True
+            )
+            return
+
+    db = load_db()
+    robber = get_user(db, interaction.user.id)
+    victim = get_user(db, usuario.id)
+
+    if not robber:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not victim:
+        await interaction.response.send_message("❌ Ese usuario no está registrado.", ephemeral=True)
+        return
+    if victim.get("coins", 0) <= 0:
+        await interaction.response.send_message("❌ Ese usuario no tiene monedas que robar.", ephemeral=True)
+        return
+
+    ROB_COOLDOWN[cd_key] = now
+
+    roll = random.randint(1, 100)
+    if roll <= 10:       # 10% — robo grande
+        pct = random.uniform(0.30, 0.50)
+        result = "grande"
+    elif roll <= 35:     # 25% — robo mediano
+        pct = random.uniform(0.10, 0.29)
+        result = "mediano"
+    elif roll <= 60:     # 25% — robo pequeño
+        pct = random.uniform(0.01, 0.09)
+        result = "pequeño"
+    else:                # 40% — fallo
+        result = "fallo"
+        pct = 0
+
+    embed = discord.Embed(color=0x9b59b6)
+    if result == "fallo":
+        embed.title = "🚨 ¡Te atraparon!"
+        embed.description = f"Intentaste robarle a **{victim['name']}** pero te pillaron con las manos en la masa. ¡Qué vergüenza!"
+        fine = min(victim.get("coins",0), random.randint(20, 80))
+        robber["coins"] = max(0, robber.get("coins",0) - fine)
+        embed.add_field(name="💸 Multa", value=f"-**{fine:,}** monedas por torpe", inline=True)
+    else:
+        stolen = max(1, int(victim.get("coins", 0) * pct))
+        victim["coins"]  = max(0, victim.get("coins",0) - stolen)
+        robber["coins"]  = robber.get("coins",0) + stolen
+        icons = {"grande":"💰💰💰", "mediano":"💰💰", "pequeño":"💰"}
+        embed.title = f"🦹 ¡Robo {icons[result]} exitoso!"
+        embed.description = f"Le robaste a **{victim['name']}** sin que se diera cuenta."
+        embed.add_field(name="💰 Robado", value=f"+**{stolen:,}** monedas", inline=True)
+        embed.add_field(name="📊 Tipo", value=result.capitalize(), inline=True)
+        embed.add_field(name="💳 Tu saldo", value=f"**{robber['coins']:,}**", inline=True)
+
+    save_db(db)
+    embed.set_footer(text="Cooldown: 2 horas")
+    await interaction.response.send_message(embed=embed)
+
+# --- WORK ---
+WORK_COOLDOWN = {}  # {user_id: timestamp}
+WORK_COOLDOWN_SECS = 3600  # 1 hora entre trabajos
+
+@bot.tree.command(name="work", description="Trabaja para ganar monedas con un minijuego")
+async def work(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    now = datetime.now(timezone.utc).timestamp()
+    if interaction.user.id in WORK_COOLDOWN:
+        diff = now - WORK_COOLDOWN[interaction.user.id]
+        if diff < WORK_COOLDOWN_SECS:
+            restante = int(WORK_COOLDOWN_SECS - diff)
+            m = restante // 60
+            s = restante % 60
+            await interaction.response.send_message(
+                f"⏰ Ya trabajaste hoy. Descansa **{m}m {s}s** más.", ephemeral=True
+            )
+            return
+
+    # Elegir trabajo
+    embed = discord.Embed(
+        title="💼 ¿En qué quieres trabajar hoy?",
+        description="Elige tu trabajo y demuestra lo que vales:",
+        color=0x2ecc71
+    )
+    embed.add_field(name="🍔 Preparar Hamburguesas", value="Secuencia de botones. Recompensa: 80-300🪙", inline=False)
+    embed.add_field(name="🎣 Pescar",                value="Opción múltiple. Recompensa: 50-400🪙",    inline=False)
+    embed.add_field(name="🎬 Crear Videos",          value="Escribe rápido. Recompensa: 100-500🪙",    inline=False)
+
+    view = discord.ui.View(timeout=30)
+    for job_id, label in [("burger","🍔 Hamburguesas"), ("fish","🎣 Pescar"), ("video","🎬 Videos")]:
+        btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary, custom_id=f"job_{job_id}")
+        btn.callback = make_job_callback(job_id, interaction.user.id)
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
+def make_job_callback(job_id: str, user_discord_id: int):
+    async def callback(inter: discord.Interaction):
+        if inter.user.id != user_discord_id:
+            await inter.response.send_message("❌ Este trabajo no es tuyo.", ephemeral=True)
+            return
+        WORK_COOLDOWN[inter.user.id] = datetime.now(timezone.utc).timestamp()
+        if job_id == "burger":
+            await start_burger_minigame(inter)
+        elif job_id == "fish":
+            await start_fish_minigame(inter)
+        elif job_id == "video":
+            await start_video_minigame(inter)
+    return callback
+
+# ── MINIJUEGO 1: HAMBURGUESAS (secuencia de botones) ──────────────────────────
+BURGER_SEQUENCES = [
+    ["🥩","🧀","🥬","🍅","🥚"],
+    ["🥬","🥩","🧀","🥚","🍅"],
+    ["🧀","🥚","🥩","🍅","🥬"],
+    ["🍅","🥬","🥚","🧀","🥩"],
+]
+
+async def start_burger_minigame(inter: discord.Interaction):
+    sequence = random.choice(BURGER_SEQUENCES)
+    seq_display = " → ".join(sequence)
+    embed = discord.Embed(
+        title="🍔 ¡Prepara la hamburguesa!",
+        description=f"Añade los ingredientes en este orden:\n**{seq_display}**\n\nTienes 20 segundos!",
+        color=0xe67e22
+    )
+    state = {"sequence": sequence, "progress": [], "user_id": inter.user.id}
+
+    view = make_burger_view(state, inter)
+    await inter.response.edit_message(embed=embed, view=view)
+
+def make_burger_view(state, orig_inter):
+    view = discord.ui.View(timeout=20)
+    ingredients = ["🥩","🧀","🥬","🍅","🥚"]
+    random.shuffle(ingredients)
+
+    for ing in ingredients:
+        btn = discord.ui.Button(label=ing, style=discord.ButtonStyle.secondary, custom_id=f"ing_{ing}")
+        async def ing_cb(inter: discord.Interaction, ingredient=ing, s=state, oi=orig_inter):
+            if inter.user.id != s["user_id"]:
+                await inter.response.send_message("❌ No es tu minijuego.", ephemeral=True)
+                return
+            s["progress"].append(ingredient)
+            expected = s["sequence"][len(s["progress"])-1]
+            if ingredient != expected:
+                # Error — calcular recompensa parcial
+                correct = len(s["progress"]) - 1
+                coins = max(30, correct * 40)
+                db = load_db(); u = get_user(db, inter.user.id)
+                u["coins"] = u.get("coins",0) + coins; save_db(db)
+                embed = discord.Embed(title="❌ ¡Ingrediente equivocado!",
+                    description=f"Pusiste **{ingredient}** pero era **{expected}**.\n+**{coins}**🪙 por {correct} ingredientes correctos.",
+                    color=0xe74c3c)
+                await inter.response.edit_message(embed=embed, view=None)
+                return
+            if len(s["progress"]) == len(s["sequence"]):
+                # ¡Perfecto!
+                coins = random.randint(200, 300)
+                db = load_db(); u = get_user(db, inter.user.id)
+                u["coins"] = u.get("coins",0) + coins; save_db(db)
+                embed = discord.Embed(title="🍔 ¡Hamburguesa perfecta!",
+                    description=f"¡Orden completada! +**{coins}**🪙", color=0x2ecc71)
+                await inter.response.edit_message(embed=embed, view=None)
+                return
+            # Siguiente ingrediente
+            done = " ✅ ".join(s["progress"])
+            remaining = len(s["sequence"]) - len(s["progress"])
+            embed = discord.Embed(title="🍔 ¡Bien!",
+                description=f"Añadido: {done}\nFaltan **{remaining}** ingredientes...",
+                color=0xe67e22)
+            await inter.response.edit_message(embed=embed, view=make_burger_view(s, oi))
+        btn.callback = ing_cb
+        view.add_item(btn)
+    return view
+
+# ── MINIJUEGO 2: PESCAR (opción múltiple) ─────────────────────────────────────
+FISH_QUESTIONS = [
+    {"q": "El agua está turbia y hay algas. ¿Qué cebo usas?", "opts": ["🪱 Gusano","🐟 Pececillo","🌽 Maíz","🦐 Camarón"], "ans": "🦐 Camarón", "coins": (200,400)},
+    {"q": "Es de madrugada en un río. ¿Dónde lanzas?", "opts": ["🌊 Centro","🪨 Rocas","🌿 Orilla con plantas","🏖️ Playa abierta"], "ans": "🌿 Orilla con plantas", "coins": (150,350)},
+    {"q": "El pez picó pero está resistiendo fuerte. ¿Qué haces?", "opts": ["💪 Tiro fuerte","⏳ Espero y suelto hilo","🎣 Recojo rápido","❌ Suelto la caña"], "ans": "⏳ Espero y suelto hilo", "coins": (180,380)},
+    {"q": "¿Qué hora es mejor para pescar peces grandes?", "opts": ["🌅 Amanecer","☀️ Mediodía","🌆 Atardecer","🌙 Noche"], "ans": "🌅 Amanecer", "coins": (100,300)},
+    {"q": "Ves burbujas en el agua. ¿Qué significa?", "opts": ["💨 Gas del fondo","🐟 Peces alimentándose","🐊 Peligro","🪨 Corriente"], "ans": "🐟 Peces alimentándose", "coins": (220,420)},
+]
+
+async def start_fish_minigame(inter: discord.Interaction):
+    q = random.choice(FISH_QUESTIONS)
+    embed = discord.Embed(
+        title="🎣 ¡Momento de pescar!",
+        description=f"**{q['q']}**\n\nElige la respuesta correcta:",
+        color=0x3498db
+    )
+    view = discord.ui.View(timeout=20)
+    opts = q["opts"].copy(); random.shuffle(opts)
+    for opt in opts:
+        style = discord.ButtonStyle.primary
+        btn = discord.ui.Button(label=opt, style=style, custom_id=f"fish_{opt}")
+        async def fish_cb(fi: discord.Interaction, choice=opt, question=q, uid=inter.user.id):
+            if fi.user.id != uid:
+                await fi.response.send_message("❌ No es tu minijuego.", ephemeral=True)
+                return
+            if choice == question["ans"]:
+                coins = random.randint(*question["coins"])
+                db = load_db(); u = get_user(db, fi.user.id)
+                u["coins"] = u.get("coins",0) + coins; save_db(db)
+                embed2 = discord.Embed(title="🎣 ¡Pez capturado!",
+                    description=f"¡Respuesta correcta! +**{coins}**🪙", color=0x2ecc71)
+            else:
+                coins = random.randint(30, 80)
+                db = load_db(); u = get_user(db, fi.user.id)
+                u["coins"] = u.get("coins",0) + coins; save_db(db)
+                embed2 = discord.Embed(title="🎣 ¡Se escapó el pez!",
+                    description=f"Respuesta incorrecta. La correcta era **{question['ans']}**.\n+**{coins}**🪙 de consolación.",
+                    color=0xe74c3c)
+            await fi.response.edit_message(embed=embed2, view=None)
+        btn.callback = fish_cb
+        view.add_item(btn)
+    await inter.response.edit_message(embed=embed, view=view)
+
+# ── MINIJUEGO 3: CREAR VIDEOS (escribe rápido) ────────────────────────────────
+VIDEO_CHALLENGES = [
+    {"prompt": "Tu video se llama: **'Top 10 momentos épicos'**\nEscribe exactamente: `epico`",       "answer": "epico",       "coins": (200,350)},
+    {"prompt": "El algoritmo pide un hashtag. Escribe: `viral`",                                        "answer": "viral",       "coins": (150,300)},
+    {"prompt": "Tu intro necesita energía. Escribe: `subscribe`",                                       "answer": "subscribe",   "coins": (180,380)},
+    {"prompt": "El editor te pide la música. Escribe: `bangermusic`",                                   "answer": "bangermusic", "coins": (250,450)},
+    {"prompt": "El thumbnail necesita texto. Escribe: `clickbait`",                                     "answer": "clickbait",   "coins": (200,400)},
+]
+
+async def start_video_minigame(inter: discord.Interaction):
+    challenge = random.choice(VIDEO_CHALLENGES)
+    embed = discord.Embed(
+        title="🎬 ¡Estudio de grabación!",
+        description=f"{challenge['prompt']}\n\n⏰ Tienes **30 segundos** para responder en el chat.",
+        color=0x9b59b6
+    )
+    await inter.response.edit_message(embed=embed, view=None)
+    msg = await inter.original_response()
+
+    def check(m):
+        return m.author.id == inter.user.id and m.channel.id == inter.channel_id
+
+    try:
+        response = await bot.wait_for("message", check=check, timeout=30)
+        if response.content.strip().lower() == challenge["answer"]:
+            coins = random.randint(*challenge["coins"])
+            db = load_db(); u = get_user(db, inter.user.id)
+            u["coins"] = u.get("coins",0) + coins; save_db(db)
+            embed2 = discord.Embed(title="🎬 ¡Video viral!",
+                description=f"¡Correcto! Tu video arrasa en internet.\n+**{coins}**🪙", color=0x2ecc71)
+        else:
+            coins = random.randint(40, 100)
+            db = load_db(); u = get_user(db, inter.user.id)
+            u["coins"] = u.get("coins",0) + coins; save_db(db)
+            embed2 = discord.Embed(title="🎬 ¡Demonetizado!",
+                description=f"Escribiste **{response.content}** pero era **{challenge['answer']}**.\n+**{coins}**🪙 de consuelo.",
+                color=0xe74c3c)
+        await msg.edit(embed=embed2)
+        try: await response.delete()
+        except: pass
+    except asyncio.TimeoutError:
+        coins = 0
+        embed2 = discord.Embed(title="🎬 ¡Se venció el tiempo!",
+            description="Tardaste demasiado. El video fue eliminado por copyright. +0🪙",
+            color=0x95a5a6)
+        await msg.edit(embed=embed2)
+
+
+
+# ============================================================
+#  SISTEMA DE COCINA
+# ============================================================
+INGREDIENTS = {
+    "🦞": "Langosta",
+    "🌶️": "Chile",
+    "🧄": "Ajo",
+    "🧅": "Cebolla",
+    "🫙": "Salsa Secreta",
+    "🍖": "Carne",
+    "🌿": "Hierbas",
+    "🥚": "Huevo",
+    "🧀": "Queso",
+    "🍫": "Chocolate",
+}
+
+RECIPES = [
+    {
+        "name": "🦞🌶️🧄 Langosta Picante",
+        "ingredients": ["🦞", "🌶️", "🧄"],
+        "effect": "coins_boost",
+        "value": 1.5,
+        "desc": "¡+50% de monedas ganadas en batalla por 3 victorias!",
+        "turns": 3,
+    },
+    {
+        "name": "🦞🍖🧅 Estofado de Langosta",
+        "ingredients": ["🦞", "🍖", "🧅"],
+        "effect": "hp_boost",
+        "value": 30,
+        "desc": "¡+30 HP a todas las figuras de tu equipo en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🫙🌿 Langosta Gourmet",
+        "ingredients": ["🦞", "🫙", "🌿"],
+        "effect": "atk_boost",
+        "value": 10,
+        "desc": "¡+10 ATK a todas las figuras de tu equipo en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🥚🧀 Langosta con Queso",
+        "ingredients": ["🦞", "🥚", "🧀"],
+        "effect": "xp_boost",
+        "value": 2.0,
+        "desc": "¡XP x2 en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🍫🌿 Langosta Dulce",
+        "ingredients": ["🦞", "🍫", "🌿"],
+        "effect": "level_fig",
+        "value": 1,
+        "desc": "¡Sube 1 nivel a la figura frontal de tu equipo!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🧄🧅 Langosta Tradicional",
+        "ingredients": ["🦞", "🧄", "🧅"],
+        "effect": "coins_boost",
+        "value": 1.3,
+        "desc": "¡+30% de monedas por 2 victorias!",
+        "turns": 2,
+    },
+    {
+        "name": "🦞🍖🫙 Langosta a la Brasa",
+        "ingredients": ["🦞", "🍖", "🫙"],
+        "effect": "atk_boost",
+        "value": 15,
+        "desc": "¡+15 ATK a todas tus figuras en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🌶️🧀 Langosta Explosiva",
+        "ingredients": ["🦞", "🌶️", "🧀"],
+        "effect": "hp_boost",
+        "value": 50,
+        "desc": "¡+50 HP a todas las figuras de tu equipo en la próxima batalla!",
+        "turns": 1,
+    },
+]
+
+TOTAL_RECIPES_FOR_EVENT = 40  # Recetas globales necesarias para Langosta Madre
+
+# Contador global de recetas cocinadas
+global_recipe_count = 0
+lobster_madre_active = False
+
+# Ingredientes que el jugador puede conseguir en batallas (se añaden a user["ingredients"])
+BATTLE_INGREDIENT_DROP_CHANCE = 40  # 40% de probabilidad de conseguir ingrediente al ganar batalla
+
+def give_battle_ingredient(user):
+    """Da un ingrediente aleatorio al usuario (excepto langosta, que va por /lobster)."""
+    non_lobster = [k for k in INGREDIENTS if k != "🦞"]
+    ingredient = random.choice(non_lobster)
+    if "ingredients" not in user:
+        user["ingredients"] = {}
+    user["ingredients"][ingredient] = user["ingredients"].get(ingredient, 0) + 1
+    return ingredient
+
+@bot.tree.command(name="ingredientes", description="Ve tus ingredientes de cocina actuales")
+async def ingredientes_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    ings = user.get("ingredients", {})
+    # Langosta del inventario de figuras
+    lobster_count = sum(1 for f in user.get("figures", []) if f["key"] == "lobster")
+    embed = discord.Embed(title="🧑‍🍳 Tu despensa", color=0xe67e22)
+    ing_str = ""
+    if lobster_count:
+        ing_str += f"🦞 Langosta x{lobster_count}\n"
+    for emoji, amount in ings.items():
+        name = INGREDIENTS.get(emoji, emoji)
+        ing_str += f"{emoji} {name} x{amount}\n"
+    embed.description = ing_str or "_Sin ingredientes. ¡Gana batallas o consigue una langosta!_"
+    embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
+async def cook_cmd(interaction: discord.Interaction):
+    global global_recipe_count, lobster_madre_active
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    # Verificar que tiene al menos una langosta
+    lobster_idx = next((i for i, f in enumerate(user.get("figures", [])) if f["key"] == "lobster"), None)
+    if lobster_idx is None:
+        await interaction.response.send_message("❌ Necesitas al menos una 🦞 Langosta. Consíguela con `/lobster`.", ephemeral=True)
+        return
+    ings = user.get("ingredients", {})
+    available = {k: v for k, v in ings.items() if v > 0}
+    if not available:
+        await interaction.response.send_message("❌ No tienes ingredientes. ¡Gana batallas para conseguir algunos!", ephemeral=True)
+        return
+
+    # Mostrar selector de ingredientes
+    ing_options = [discord.SelectOption(label=f"{emoji} {INGREDIENTS.get(emoji, emoji)} x{amt}", value=emoji, emoji=emoji)
+                   for emoji, amt in available.items()]
+
+    state = {"selected": [], "user_id": interaction.user.id}
+
+    async def show_cook_menu(inter, state, is_first=False):
+        selected_str = " + ".join(state["selected"]) if state["selected"] else "_Ninguno aún_"
+        embed = discord.Embed(
+            title="🧑‍🍳 ¡Hora de cocinar!",
+            description=f"🦞 Langosta + **{selected_str}**\n\nElige hasta 3 ingredientes y luego **Cocinar**:",
+            color=0xe67e22
+        )
+        view = discord.ui.View(timeout=60)
+        # Select de ingredientes
+        sel = discord.ui.Select(
+            placeholder="Añadir ingrediente...",
+            options=ing_options,
+            max_values=1
+        )
+        async def add_ingredient(si: discord.Interaction):
+            if si.user.id != state["user_id"]:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen = sel.values[0]
+            if len(state["selected"]) >= 3:
+                await si.response.send_message("❌ Máximo 3 ingredientes.", ephemeral=True)
+                return
+            state["selected"].append(chosen)
+            await si.response.edit_message(
+                embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + **{' + '.join(state['selected'])}**\n\nElige más o presiona Cocinar:", color=0xe67e22),
+                view=build_cook_view(state, si)
+            )
+        sel.callback = add_ingredient
+        view.add_item(sel)
+
+        cook_btn = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success, disabled=len(state["selected"]) == 0)
+        async def do_cook(ci: discord.Interaction):
+            if ci.user.id != state["user_id"]:
+                await ci.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            global global_recipe_count, lobster_madre_active
+            db2 = load_db()
+            user2 = get_user(db2, ci.user.id)
+            # Verificar langosta
+            lb_idx = next((i for i, f in enumerate(user2.get("figures", [])) if f["key"] == "lobster"), None)
+            if lb_idx is None:
+                await ci.response.edit_message(content="❌ Ya no tienes langosta.", embed=None, view=None)
+                return
+            # Verificar ingredientes
+            ings2 = user2.get("ingredients", {})
+            for ing in state["selected"]:
+                if ings2.get(ing, 0) <= 0:
+                    await ci.response.edit_message(content=f"❌ Ya no tienes {ing}.", embed=None, view=None)
+                    return
+            # Consumir
+            user2["figures"].pop(lb_idx)
+            for ing in state["selected"]:
+                ings2[ing] -= 1
+            user2["ingredients"] = ings2
+            # Buscar receta
+            matched = None
+            for recipe in RECIPES:
+                recipe_ings = set(recipe["ingredients"])
+                used = set(["🦞"] + state["selected"])
+                if recipe_ings == used:
+                    matched = recipe
+                    break
+            global_recipe_count += 1
+            if "recipe_count" not in user2:
+                user2["recipe_count"] = 0
+            user2["recipe_count"] = user2.get("recipe_count", 0) + 1
+            # Aplicar efecto
+            result_desc = ""
+            if matched:
+                if "buffs" not in user2:
+                    user2["buffs"] = []
+                user2["buffs"].append({"effect": matched["effect"], "value": matched["value"], "turns": matched["turns"]})
+                if matched["effect"] == "level_fig":
+                    team = user2.get("team", [])
+                    if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
+                        user2["figures"][team[0]]["level"] = user2["figures"][team[0]].get("level", 1) + 1
+                result_desc = matched["desc"]
+                recipe_name = matched["name"]
+            else:
+                # Receta desconocida: monedas aleatorias
+                coins = random.randint(50, 200)
+                user2["coins"] = user2.get("coins", 0) + coins
+                recipe_name = "🍲 Receta Experimental"
+                result_desc = f"No es receta conocida, pero huele bien. +{coins}🪙"
+            save_db(db2)
+            embed2 = discord.Embed(
+                title=f"✅ {recipe_name}",
+                description=result_desc,
+                color=0x2ecc71
+            )
+            embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
+            await ci.response.edit_message(embed=embed2, view=None)
+            # ¿Langosta Madre?
+            if global_recipe_count >= TOTAL_RECIPES_FOR_EVENT and not lobster_madre_active:
+                lobster_madre_active = True
+                await trigger_lobster_madre(ci.channel)
+        cook_btn.callback = do_cook
+        view.add_item(cook_btn)
+        return view
+
+    def build_cook_view(state, inter):
+        import asyncio as _asyncio
+        view = discord.ui.View(timeout=60)
+        sel2 = discord.ui.Select(placeholder="Añadir otro ingrediente...", options=ing_options, max_values=1)
+        async def add_again(si: discord.Interaction):
+            if si.user.id != state["user_id"]:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            chosen = sel2.values[0]
+            if len(state["selected"]) >= 3:
+                await si.response.send_message("❌ Máximo 3 ingredientes.", ephemeral=True)
+                return
+            state["selected"].append(chosen)
+            await si.response.edit_message(
+                embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + **{' + '.join(state['selected'])}**", color=0xe67e22),
+                view=build_cook_view(state, si)
+            )
+        sel2.callback = add_again
+        view.add_item(sel2)
+        cook2 = discord.ui.Button(label="🍳 ¡Cocinar!", style=discord.ButtonStyle.success)
+        cook2.callback = do_cook
+        view.add_item(cook2)
+        return view
+
+    view_final = await show_cook_menu(interaction, state, is_first=True)
+    await interaction.response.send_message(
+        embed=discord.Embed(title="🧑‍🍳 ¡Hora de cocinar!", description=f"🦞 Langosta + _Ninguno aún_\n\nElige ingredientes y luego Cocinar:", color=0xe67e22),
+        view=view_final,
+        ephemeral=True
+    )
+
+# ─── LANGOSTA MADRE (evento global) ───────────────────────────────────────────
+LOBSTER_MADRE_HP = 300000
+lobster_madre_state = {}
+
+async def trigger_lobster_madre(channel):
+    """Inicia el evento global de la Langosta Madre."""
+    global lobster_madre_state
+    lobster_madre_state = {
+        "hp": LOBSTER_MADRE_HP,
+        "max_hp": LOBSTER_MADRE_HP,
+        "participants": {},  # user_id -> damage dealt
+        "active": True,
+    }
+    embed = discord.Embed(
+        title="🦞🦞🦞 ¡APARECE LA LANGOSTA MADRE! 🦞🦞🦞",
+        description=(
+            "¡40 recetas han sido cocinadas! ¡La **LANGOSTA MADRE** ha despertado!\n\n"
+            "❤️ **HP:** 300,000\n⚔️ **ATK:** 70 | 🛡️ **DEF:** 30\n\n"
+            "**¡Tienes 60 segundos para unirte!** Todos los jugadores que se unan atacarán juntos."
+        ),
+        color=0xe74c3c
+    )
+    view = discord.ui.View(timeout=60)
+    join_btn = discord.ui.Button(label="⚔️ ¡UNIRME AL ATAQUE!", style=discord.ButtonStyle.danger, custom_id="join_lobster")
+    async def join_cb(inter: discord.Interaction):
+        uid = inter.user.id
+        if not lobster_madre_state.get("active"):
+            await inter.response.send_message("❌ El evento ya terminó.", ephemeral=True)
+            return
+        if uid in lobster_madre_state["participants"]:
+            await inter.response.send_message("✅ Ya estás en el ataque!", ephemeral=True)
+            return
+        lobster_madre_state["participants"][uid] = 0
+        await inter.response.send_message(f"⚔️ ¡<@{uid}> se unió al ataque! Ya somos **{len(lobster_madre_state['participants'])}** guerreros!", ephemeral=False)
+    join_btn.callback = join_cb
+    view.add_item(join_btn)
+    msg = await channel.send(embed=embed, view=view)
+    await asyncio.sleep(60)
+    # ¡A pelear!
+    await run_lobster_madre_battle(channel, msg)
+
+async def run_lobster_madre_battle(channel, msg):
+    """Ejecuta la batalla contra la Langosta Madre con todos los participantes."""
+    global lobster_madre_active
+    participants = list(lobster_madre_state.get("participants", {}).keys())
+    if not participants:
+        await channel.send("🦞 Nadie se unió al ataque... La Langosta Madre se retira victoriosa.")
+        lobster_madre_active = False
+        return
+
+    lm_hp = lobster_madre_state["hp"]
+    lm_max = lobster_madre_state["max_hp"]
+    lm_atk = 70
+    all_skills_pool = [sk for skills in FIGURE_SKILLS.values() for sk in skills
+                       if sk["type"] not in ("consumed_fury", "revive_team", "ban_hammer", "drain_fill", "lobster")]
+    round_num = 0
+
+    while lm_hp > 0 and participants:
+        round_num += 1
+        log = [f"**Ronda {round_num}**"]
+
+        # Jugadores atacan
+        db = load_db()
+        total_dmg = 0
+        for uid in participants[:]:
+            user = get_user(db, uid)
+            if not user:
+                participants.remove(uid)
+                continue
+            # Ataque básico del jugador
+            atk = random.randint(15, 40)
+            lm_hp = max(0, lm_hp - atk)
+            total_dmg += atk
+            lobster_madre_state["participants"][uid] = lobster_madre_state["participants"].get(uid, 0) + atk
+        log.append(f"⚔️ Los {len(participants)} guerreros hacen **{total_dmg}** daño total! (🦞 HP: {lm_hp:,}/{lm_max:,})")
+
+        if lm_hp <= 0:
+            break
+
+        # Langosta Madre ataca con habilidad aleatoria
+        skill_used = random.choice(all_skills_pool)
+        dmg_to_all = random.randint(20, lm_atk)
+        log.append(f"🦞 **¡LANGOSTA MADRE** usa **{skill_used['name']}**! ¡{dmg_to_all} daño a todos!")
+
+        bar_len = 20
+        filled = int((lm_hp / lm_max) * bar_len)
+        hp_bar = "🟥" * filled + "⬛" * (bar_len - filled)
+
+        embed = discord.Embed(
+            title="🦞 LANGOSTA MADRE",
+            description=f"{hp_bar}\n❤️ **{lm_hp:,}/{lm_max:,} HP**\n\n" + "\n".join(log),
+            color=0xe74c3c if lm_hp > lm_max * 0.5 else 0x95a5a6
+        )
+        await msg.edit(embed=embed)
+        await asyncio.sleep(3)
+
+        if lm_hp <= 0:
+            break
+
+    # Resultado
+    lobster_madre_active = False
+    if lm_hp <= 0:
+        db = load_db()
+        rewards_text = []
+        for uid, dmg in lobster_madre_state["participants"].items():
+            user = get_user(db, uid)
+            if user:
+                coins_reward = 500 + (dmg // 10)
+                user["coins"] = user.get("coins", 0) + coins_reward
+                rewards_text.append(f"<@{uid}>: +{coins_reward}🪙 ({dmg} daño total)")
+        save_db(db)
+        embed = discord.Embed(
+            title="🏆 ¡LANGOSTA MADRE DERROTADA!",
+            description="¡Increíble! ¡Los guerreros lograron derrotar a la Langosta Madre!\n\n" + "\n".join(rewards_text[:10]),
+            color=0x2ecc71
+        )
+    else:
+        embed = discord.Embed(
+            title="💀 La Langosta Madre sobrevivió...",
+            description=f"¡La LANGOSTA MADRE sobrevivió con **{lm_hp:,} HP** restantes! ¡Mejor suerte la próxima vez!",
+            color=0xe74c3c
+        )
+    await channel.send(embed=embed)
 
 # ============================================================
 #  ARRANQUE
