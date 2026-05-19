@@ -4511,31 +4511,31 @@ def is_admin(interaction: discord.Interaction) -> bool:
 async def reset_battle(interaction: discord.Interaction):
     removed = False
     channel_id = interaction.channel_id
+    uid = interaction.user.id
 
     if channel_id in active_battles:
         battle = active_battles[channel_id]
-        # Solo el jugador involucrado o un admin puede resetear
-        uid = interaction.user.id
         if uid != battle.p1 and uid != battle.p2 and not is_admin(interaction):
             await interaction.response.send_message("❌ Solo los jugadores de esta batalla o un admin pueden resetearla.", ephemeral=True)
             return
         del active_battles[channel_id]
         removed = True
 
-    if channel_id in active_multiplayer:
-        sess = active_multiplayer[channel_id]
-        uid = interaction.user.id
+    # Usar globals() porque active_multiplayer/active_mp_battles se definen después en el archivo
+    _mp = globals().get("active_multiplayer", {})
+    if channel_id in _mp:
+        sess = _mp[channel_id]
         if uid not in sess.players and not is_admin(interaction):
             await interaction.response.send_message("❌ Solo los jugadores de esta sala o un admin pueden resetearla.", ephemeral=True)
             return
-        del active_multiplayer[channel_id]
+        del _mp[channel_id]
         removed = True
 
-    if channel_id in active_mp_battles:
-        del active_mp_battles[channel_id]
+    _mpb = globals().get("active_mp_battles", {})
+    if channel_id in _mpb:
+        del _mpb[channel_id]
         removed = True
 
-    # Limpiar también peleas PvP pendientes en este canal
     to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == channel_id]
     for k in to_remove:
         del pending_pvp[k]
