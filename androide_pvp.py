@@ -5586,7 +5586,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
 # ============================================================
 #  PERFIL DE OTROS USUARIOS
 # ============================================================
-@bot.tree.command(name="verPerfil", description="Ver el perfil de otro usuario")
+@bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
 @app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
 async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
@@ -5613,7 +5613,7 @@ async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="verFiguras", description="Ver las figuras de otro usuario")
+@bot.tree.command(name="verfiguras", description="Ver las figuras de otro usuario")
 @app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
 async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
@@ -6481,3 +6481,4 @@ _base_check_figure_levelup = check_figure_levelup
 #  ARRANQUE
 # ============================================================
 bot.run(TOKEN)
+
