@@ -5,6 +5,7 @@ import json
 import os
 import random
 import asyncio
+import time
 from datetime import datetime, timezone
 from flask import Flask
 import threading
@@ -2767,19 +2768,22 @@ async def registrar(interaction: discord.Interaction):
     await interaction.response.send_modal(modal)
 
 # --- PERFIL ---
-@bot.tree.command(name="perfil", description="Mira tu perfil y tus estadísticas")
-async def perfil(interaction: discord.Interaction):
+@bot.tree.command(name="perfil", description="Mira tu perfil o el de otro usuario")
+@app_commands.describe(usuario="Usuario cuyo perfil ver (opcional)")
+async def perfil(interaction: discord.Interaction, usuario: discord.Member = None):
     db = load_db()
-    user = get_user(db, interaction.user.id)
+    target_member = usuario or interaction.user
+    user = get_user(db, target_member.id)
     if not user:
-        await interaction.response.send_message("❌ No estás registrado. Usa `/registrar` primero.", ephemeral=True)
+        msg = "❌ Ese usuario no está registrado." if usuario else "❌ No estás registrado. Usa `/registrar` primero."
+        await interaction.response.send_message(msg, ephemeral=True)
         return
 
     embed = discord.Embed(
         title=f"👤 Perfil de {user['name']}",
         color=0x3498db
     )
-    embed.set_thumbnail(url=interaction.user.display_avatar.url)
+    embed.set_thumbnail(url=target_member.display_avatar.url)
     embed.add_field(name="💰 Monedas", value=f"{user['coins']:,}", inline=True)
     embed.add_field(name="🏆 Nivel", value=user.get("level", 1), inline=True)
     embed.add_field(name="⚡ XP", value=f"{user.get('xp',0)}/{xp_to_level_up(user.get('level',1))}", inline=True)
@@ -2929,17 +2933,21 @@ class ShopView(discord.ui.View):
         await show_shop_page(interaction, available, user, self.page + 1, db)
 
 # --- MIS FIGURAS ---
-@bot.tree.command(name="misfiguras", description="Ver tu colección de figuras")
-async def misfiguras(interaction: discord.Interaction):
+@bot.tree.command(name="misfiguras", description="Ver tu colección de figuras o la de otro usuario")
+@app_commands.describe(usuario="Usuario cuyas figuras ver (opcional)")
+async def misfiguras(interaction: discord.Interaction, usuario: discord.Member = None):
     db = load_db()
-    user = get_user(db, interaction.user.id)
+    target_member = usuario or interaction.user
+    user = get_user(db, target_member.id)
     if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        msg = "❌ Ese usuario no está registrado." if usuario else "❌ Usa `/registrar` primero."
+        await interaction.response.send_message(msg, ephemeral=True)
         return
 
     figs = user.get("figures", [])
     if not figs:
-        await interaction.response.send_message("📭 No tienes figuras. Usa `/tienda` para comprar.", ephemeral=True)
+        msg = f"📭 **{user['name']}** no tiene figuras." if usuario else "📭 No tienes figuras. Usa `/tienda` para comprar."
+        await interaction.response.send_message(msg, ephemeral=True)
         return
 
     await show_figure_menu(interaction, user, figs, page=0)
@@ -3566,6 +3574,465 @@ def make_bot_fight_callback(bot_data, user, user_discord_id):
         battle.message = await inter.original_response()
     return callback
 
+
+# ============================================================
+#  SISTEMA MULTIPLAYER (hasta 4 jugadores)
+# ============================================================
+active_mp_battles = {}  # channel_id -> MPBattleState
+
+GLOBAL_EVENTS = [
+    {"name": "🌀 Inversión de Turnos", "desc": "¡El orden de turnos se invierte!", "type": "reverse_order"},
+    {"name": "💥 Ronda de Fuego",      "desc": "¡Todas las figuras reciben 10 de daño extra este turno!", "type": "fire_round"},
+    {"name": "⚡ Sobrecarga",          "desc": "¡Todas las barras de energía se llenan al máximo!", "type": "fill_energy"},
+    {"name": "🛡️ Escudo Global",       "desc": "¡Todas las figuras reciben la mitad de daño este turno!", "type": "half_damage"},
+    {"name": "🎲 Turno del Caos",      "desc": "¡El orden de turnos se baraja aleatoriamente!", "type": "shuffle_order"},
+    {"name": "💚 Curación Masiva",     "desc": "¡Todas las figuras activas se curan 30 HP!", "type": "mass_heal"},
+]
+
+class MPBattleState:
+    """Batalla de hasta 4 jugadores — todos contra todos en orden circular."""
+    def __init__(self, players: list, teams: dict, names: dict):
+        """
+        players: lista de IDs de jugador en orden de turno
+        teams: {player_id: [fighter, fighter, fighter]}
+        names: {player_id: "nombre"}
+        """
+        self.players = players          # orden de turno
+        self.teams   = teams            # {pid: [fighters]}
+        self.active  = {pid: 0 for pid in players}   # figura activa por jugador
+        self.names   = names
+        self.turn_idx = 0               # índice en self.players
+        self.log = []
+        self.message = None
+        self.event_cooldown = 0         # turnos hasta próximo evento
+
+    def current_player(self):
+        return self.players[self.turn_idx % len(self.players)]
+
+    def current_fighter(self, pid):
+        idx = self.active[pid]
+        team = self.teams[pid]
+        return team[idx] if idx < len(team) else None
+
+    def active_fighter(self):
+        return self.current_fighter(self.current_player())
+
+    def alive_players(self):
+        return [pid for pid in self.players
+                if any(f["hp"] > 0 for f in self.teams[pid])]
+
+    def next_active(self, pid):
+        team = self.teams[pid]
+        cur = self.active[pid]
+        for i in range(cur+1, len(team)):
+            if team[i]["hp"] > 0 and not team[i].get("force_locked",0) > 0:
+                return i
+        return None
+
+    def hp_bar(self, cur, mx):
+        ratio = max(0, cur/mx)
+        filled = int(ratio * 8)
+        return "🟩"*filled + "⬛"*(8-filled) + f" {cur}/{mx}"
+
+    def energy_bar(self, energy, color="blue"):
+        block = "🟦" if color=="blue" else "🟥"
+        bar = ""
+        for i in range(10):
+            pos = (i+1)*10
+            if pos <= energy:
+                if pos==30: bar+="🟡"
+                elif pos==60: bar+="🟠"
+                elif pos==100: bar+="🔴"
+                else: bar+=block
+            else: bar+="⬛"
+        return bar + f" {energy}/100"
+
+    def get_embed(self, title="⚔️ BATALLA MULTIPLAYER"):
+        embed = discord.Embed(title=title, color=0xe74c3c)
+        cur_pid = self.current_player()
+
+        # Mostrar todos los equipos
+        for pid in self.players:
+            fighter = self.current_fighter(pid)
+            is_turn = (pid == cur_pid)
+            turn_mark = " 🎮 **TU TURNO**" if is_turn else ""
+            name = self.names.get(pid, str(pid))
+
+            if not fighter or fighter["hp"] <= 0:
+                val = "💀 Sin figuras"
+            else:
+                val = (
+                    f"{fighter['emoji']} **{fighter['name']}**{turn_mark}\n"
+                    f"Vida: {self.hp_bar(fighter['hp'], fighter['max_hp'])}\n"
+                    f"Energía: {self.energy_bar(fighter['energy'], 'blue' if is_turn else 'red')}"
+                )
+            embed.add_field(name=f"👤 {name}", value=val, inline=True)
+
+        if self.log:
+            embed.add_field(name="📜 Último turno", value="\n".join(self.log[-4:]), inline=False)
+
+        embed.set_footer(text=f"Turno de: {self.names.get(cur_pid, str(cur_pid))}")
+        return embed
+
+def get_mp_view(battle: MPBattleState, channel_id: int):
+    """Genera botones para el jugador activo en la batalla MP."""
+    view = BattleView.__new__(BattleView)
+    discord.ui.View.__init__(view, timeout=None)
+
+    cur_pid = battle.current_player()
+    fighter = battle.active_fighter()
+    if not fighter:
+        return view
+
+    # Ataque básico
+    atk_btn = discord.ui.Button(label="⚔️ Atacar", style=discord.ButtonStyle.success, custom_id="mp_attack", row=0)
+
+    # Botones de target (a quién atacar)
+    targets = [pid for pid in battle.players if pid != cur_pid and any(f["hp"]>0 for f in battle.teams[pid])]
+
+    async def atk_cb(inter: discord.Interaction):
+        if inter.user.id != cur_pid:
+            await inter.response.send_message("❌ No es tu turno.", ephemeral=True)
+            return
+        if len(targets) == 1:
+            await execute_mp_action(inter, battle, channel_id, "basic", targets[0], None)
+        else:
+            await show_mp_target_select(inter, battle, channel_id, "basic", None)
+    atk_btn.callback = atk_cb
+    view.add_item(atk_btn)
+
+    # Habilidades
+    type_emoji = {"damage":"⚔️","heal":"💚","drain":"⚡","drain_fill":"🔴","parry":"🛡️",
+                  "buff":"⭐","gamble":"🎲","gamble_fire":"🔥","team_atk_buff":"⭐","dot":"💣",
+                  "bad_update":"🔳","ban_hammer":"🔨","fly_away":"✈️","michi_counter":"🦊",
+                  "glitch_dmg":"🌀","corruption":"🌑","retribution":"🦷"}
+    for i, skill in enumerate(fighter.get("skills", [])):
+        can = fighter["energy"] >= skill["cost"]
+        te = type_emoji.get(skill["type"], "⚡")
+        btn = discord.ui.Button(
+            label=f"{te} {skill['name']} [{skill['cost']}⚡]",
+            style=discord.ButtonStyle.danger if can else discord.ButtonStyle.secondary,
+            disabled=not can,
+            custom_id=f"mp_skill_{i}",
+            row=1
+        )
+        async def sk_cb(inter: discord.Interaction, si=i, sk=skill):
+            if inter.user.id != cur_pid:
+                await inter.response.send_message("❌ No es tu turno.", ephemeral=True)
+                return
+            heal_types = ("heal","team_atk_buff","heal_team_self","gamble","drain_fill")
+            if sk["type"] in heal_types:
+                await execute_mp_action(inter, battle, channel_id, "skill", cur_pid, si)
+            elif len(targets) == 1:
+                await execute_mp_action(inter, battle, channel_id, "skill", targets[0], si)
+            else:
+                await show_mp_target_select(inter, battle, channel_id, "skill", si)
+        btn.callback = sk_cb
+        view.add_item(btn)
+
+    return view
+
+async def show_mp_target_select(inter: discord.Interaction, battle: MPBattleState, channel_id: int, action_type: str, skill_idx):
+    """Muestra selector de objetivo para ataques MP."""
+    cur_pid = battle.current_player()
+    targets = [pid for pid in battle.players if pid != cur_pid and any(f["hp"]>0 for f in battle.teams[pid])]
+
+    options = []
+    for pid in targets:
+        f = battle.current_fighter(pid)
+        if f:
+            options.append(discord.SelectOption(
+                label=f"{battle.names.get(pid,'?')} — {f['emoji']} {f['name']} ({f['hp']}HP)",
+                value=str(pid)
+            ))
+
+    sel = discord.ui.Select(placeholder="¿A quién atacas?", options=options)
+    async def sel_cb(si: discord.Interaction):
+        if si.user.id != cur_pid:
+            await si.response.send_message("❌ No es tu selección.", ephemeral=True)
+            return
+        target_id = int(sel.values[0])
+        await execute_mp_action(si, battle, channel_id, action_type, target_id, skill_idx)
+    sel.callback = sel_cb
+    v = discord.ui.View(timeout=60)
+    v.add_item(sel)
+    await inter.response.edit_message(
+        embed=battle.get_embed(title="🎯 Elige tu objetivo"),
+        view=v
+    )
+
+async def execute_mp_action(inter: discord.Interaction, battle: MPBattleState, channel_id: int, action_type: str, target_id, skill_idx):
+    """Ejecuta la acción del jugador activo en MP."""
+    cur_pid = battle.current_player()
+    attacker = battle.active_fighter()
+    if not attacker:
+        return
+
+    battle.log = []
+
+    # Subir energía
+    attacker["energy"] = min(ENERGY_MAX, attacker["energy"] + ENERGY_PER_TURN + attacker.get("energy_bonus",0))
+
+    if action_type == "basic":
+        defender = battle.current_fighter(target_id)
+        if not defender:
+            await inter.response.send_message("❌ Objetivo inválido.", ephemeral=True)
+            return
+        bonus_atk = attacker.pop("atk_buff", 0)
+        max_power = max((sk.get("power",0) for sk in attacker.get("skills",[])), default=20)
+        base_dmg = max(1, round(max_power/2))
+        dmg = max(1, base_dmg + random.randint(-2,3) - (defender["defense"]//6))
+        defender["hp"] = max(0, defender["hp"] - dmg)
+        tname = battle.names.get(target_id, "?")
+        battle.log.append(f"⚔️ **{attacker['emoji']} {attacker['name']}** ataca a **{tname}** → **{dmg}** daño! (+20⚡)")
+
+    elif action_type == "skill" and skill_idx is not None:
+        skill = attacker["skills"][skill_idx]
+        if attacker["energy"] < skill["cost"]:
+            await inter.response.send_message("❌ No tienes energía suficiente.", ephemeral=True)
+            return
+        attacker["energy"] -= skill["cost"]
+        stype = skill["type"]
+
+        if stype == "damage":
+            defender = battle.current_fighter(target_id)
+            if not defender:
+                await inter.response.send_message("❌ Objetivo inválido.", ephemeral=True)
+                return
+            bonus_atk = attacker.pop("atk_buff", 0)
+            dmg = max(1, int(attacker["atk"] * skill["power"]/100) + random.randint(-3,8) - (defender["defense"]//4) + bonus_atk)
+            defender["hp"] = max(0, defender["hp"] - dmg)
+            tname = battle.names.get(target_id,"?")
+            battle.log.append(f"⚔️ **{attacker['name']}** usa **{skill['name']}** en **{tname}** → **{dmg}** daño!")
+        elif stype == "heal":
+            heal = max(1, int(skill["power"] + random.randint(-2,5)))
+            if not attacker.get("no_heal"):
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal)
+            battle.log.append(f"💚 **{attacker['name']}** usa **{skill['name']}** → +**{heal}** HP!")
+        elif stype == "team_atk_buff":
+            buff = skill.get("atk_buff",10)
+            for f in battle.teams[cur_pid]:
+                if f["hp"] > 0:
+                    f["atk_buff"] = f.get("atk_buff",0) + buff
+            battle.log.append(f"⭐ **{attacker['name']}** usa **{skill['name']}**! Todo el equipo +{buff} ATK!")
+        elif stype == "dot":
+            defender = battle.current_fighter(target_id)
+            if defender:
+                if "dots" not in defender: defender["dots"] = []
+                defender["dots"].append({"dmg": skill["power"], "turns": skill.get("dot_turns",3)})
+                battle.log.append(f"💣 **{attacker['name']}** usa **{skill['name']}**! {skill['power']} daño/turno x{skill.get('dot_turns',3)}")
+        else:
+            battle.log.append(f"✨ **{attacker['name']}** usa **{skill['name']}**!")
+
+    # Verificar si algún jugador perdió todas sus figuras
+    eliminated = []
+    for pid in list(battle.players):
+        if pid == cur_pid: continue
+        team = battle.teams[pid]
+        if all(f["hp"] <= 0 for f in team):
+            eliminated.append(pid)
+
+    for pid in eliminated:
+        battle.players.remove(pid)
+        battle.log.append(f"💀 **{battle.names.get(pid,'?')}** fue eliminado!")
+
+    # ¿Solo queda 1 jugador?
+    alive = battle.alive_players()
+    if len(alive) <= 1:
+        await end_mp_battle(inter, battle, channel_id, alive[0] if alive else cur_pid)
+        return
+
+    # Avanzar turno (saltear jugadores eliminados)
+    battle.turn_idx = (battle.turn_idx + 1) % len(battle.players)
+
+    # Evento global aleatorio (5% por turno)
+    event_triggered = None
+    if random.random() < 0.05:
+        event_triggered = random.choice(GLOBAL_EVENTS)
+        await apply_global_event(battle, event_triggered)
+        battle.log.append(f"🌀 **EVENTO GLOBAL: {event_triggered['name']}** — {event_triggered['desc']}")
+
+    embed = battle.get_embed()
+    if event_triggered:
+        embed.color = 0x9b59b6
+    view = get_mp_view(battle, channel_id)
+
+    try:
+        await inter.response.edit_message(embed=embed, view=view)
+    except Exception:
+        if battle.message:
+            await battle.message.edit(embed=embed, view=view)
+
+async def apply_global_event(battle: MPBattleState, event: dict):
+    etype = event["type"]
+    all_fighters = [battle.current_fighter(pid) for pid in battle.players if battle.current_fighter(pid)]
+
+    if etype == "reverse_order":
+        battle.players.reverse()
+        battle.turn_idx = 0
+
+    elif etype == "fire_round":
+        for f in all_fighters:
+            if f and f["hp"] > 0:
+                f["hp"] = max(1, f["hp"] - 10)
+
+    elif etype == "fill_energy":
+        for f in all_fighters:
+            if f: f["energy"] = ENERGY_MAX
+
+    elif etype == "half_damage":
+        for f in all_fighters:
+            if f: f["half_damage_turn"] = True
+
+    elif etype == "shuffle_order":
+        random.shuffle(battle.players)
+        battle.turn_idx = 0
+
+    elif etype == "mass_heal":
+        for f in all_fighters:
+            if f and f["hp"] > 0 and not f.get("no_heal"):
+                f["hp"] = min(f["max_hp"], f["hp"] + 30)
+
+async def end_mp_battle(inter: discord.Interaction, battle: MPBattleState, channel_id: int, winner_id: int):
+    if channel_id in active_mp_battles:
+        del active_mp_battles[channel_id]
+
+    embed = discord.Embed(
+        title="🏆 ¡FIN DE LA BATALLA MULTIPLAYER!",
+        description=f"🎉 ¡**{battle.names.get(winner_id,'?')}** gana la batalla!",
+        color=0xf1c40f
+    )
+
+    # Recompensas
+    db = load_db()
+    for pid in battle.players + list(battle.teams.keys()):
+        if pid == 0: continue
+        u = get_user(db, pid)
+        if not u: continue
+        if pid == winner_id:
+            u["wins"] = u.get("wins",0) + 1
+            u["coins"] = u.get("coins",0) + COINS_WIN * 2
+            u["xp"] = u.get("xp",0) + XP_PER_WIN
+        else:
+            u["losses"] = u.get("losses",0) + 1
+            u["coins"] = u.get("coins",0) + COINS_LOSS
+    save_db(db)
+
+    embed.add_field(name="💰 Recompensas", value=f"Ganador: +{COINS_WIN*2}🪙 | Resto: +{COINS_LOSS}🪙", inline=False)
+
+    try:
+        await inter.response.edit_message(embed=embed, view=None)
+    except Exception:
+        if battle.message:
+            await battle.message.edit(embed=embed, view=None)
+
+# --- COMANDO /multiplayer ---
+@bot.tree.command(name="multiplayer", description="Crea una batalla de hasta 4 jugadores")
+async def multiplayer(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not user.get("figures"):
+        await interaction.response.send_message("❌ Necesitas figuras para batallar.", ephemeral=True)
+        return
+    if interaction.channel_id in active_mp_battles or interaction.channel_id in active_battles:
+        await interaction.response.send_message("❌ Ya hay una batalla activa en este canal.", ephemeral=True)
+        return
+
+    # Sala de espera
+    lobby = {
+        "host": interaction.user.id,
+        "players": [interaction.user.id],
+        "channel_id": interaction.channel_id,
+    }
+
+    embed = discord.Embed(
+        title="⚔️ Sala de Batalla Multiplayer",
+        description=f"**{user['name']}** abrió una sala. ¡Únete antes de que empiece!\n\n**Jugadores:** {user['name']}\n_(Mínimo 2, máximo 4)_",
+        color=0x3498db
+    )
+    embed.set_footer(text="El host puede iniciar con 2+ jugadores")
+
+    join_btn  = discord.ui.Button(label="⚔️ Unirme", style=discord.ButtonStyle.primary, custom_id="mp_join")
+    start_btn = discord.ui.Button(label="▶️ Iniciar", style=discord.ButtonStyle.success, custom_id="mp_start", disabled=True)
+    view = discord.ui.View(timeout=120)
+
+    async def join_cb(inter: discord.Interaction):
+        if inter.user.id in lobby["players"]:
+            await inter.response.send_message("✅ Ya estás en la sala.", ephemeral=True)
+            return
+        if len(lobby["players"]) >= 4:
+            await inter.response.send_message("❌ La sala está llena (máx 4).", ephemeral=True)
+            return
+        db2 = load_db()
+        u2 = get_user(db2, inter.user.id)
+        if not u2:
+            await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        if not u2.get("figures"):
+            await inter.response.send_message("❌ Necesitas figuras para unirte.", ephemeral=True)
+            return
+        lobby["players"].append(inter.user.id)
+
+        db3 = load_db()
+        names = [get_user(db3, pid)["name"] for pid in lobby["players"]]
+        new_embed = discord.Embed(
+            title="⚔️ Sala de Batalla Multiplayer",
+            description=f"**Jugadores ({len(lobby['players'])}/4):**\n" + "\n".join(f"• {n}" for n in names),
+            color=0x3498db
+        )
+        start_btn.disabled = len(lobby["players"]) < 2
+        await inter.response.edit_message(embed=new_embed, view=view)
+
+    async def start_cb(inter: discord.Interaction):
+        if inter.user.id != lobby["host"]:
+            await inter.response.send_message("❌ Solo el host puede iniciar.", ephemeral=True)
+            return
+        if len(lobby["players"]) < 2:
+            await inter.response.send_message("❌ Necesitas al menos 2 jugadores.", ephemeral=True)
+            return
+
+        db2 = load_db()
+        teams = {}
+        names = {}
+        players_order = lobby["players"].copy()
+        random.shuffle(players_order)
+
+        for pid in players_order:
+            u = get_user(db2, pid)
+            if not u or not u.get("figures"):
+                continue
+            team_indices = u.get("team", [None,None,None])
+            figs = u.get("figures", [])
+            keys = []
+            figs_data = []
+            for idx in team_indices:
+                if idx is not None and idx < len(figs):
+                    keys.append(figs[idx]["key"])
+                    figs_data.append(figs[idx])
+            while len(keys) < 3 and figs:
+                keys.append(figs[0]["key"])
+                figs_data.append(figs[0])
+            teams[pid] = [make_fighter(k, fd) for k, fd in zip(keys[:3], figs_data[:3])]
+            names[pid] = u["name"]
+
+        battle = MPBattleState(players_order, teams, names)
+        active_mp_battles[inter.channel_id] = battle
+
+        embed2 = battle.get_embed(title="⚔️ ¡BATALLA MULTIPLAYER INICIADA!")
+        view2 = get_mp_view(battle, inter.channel_id)
+        await inter.response.edit_message(embed=embed2, view=view2)
+        battle.message = await inter.original_response()
+
+    join_btn.callback  = join_cb
+    start_btn.callback = start_cb
+    view.add_item(join_btn)
+    view.add_item(start_btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
 # --- RETAR A JUGADOR ---
 @bot.tree.command(name="retar", description="Reta a otro jugador a un duelo PvP de equipos")
 @app_commands.describe(rival="El jugador al que quieres retar")
@@ -3681,7 +4148,55 @@ async def retar(interaction: discord.Interaction, rival: discord.Member):
     await interaction.response.send_message(content=rival.mention, embed=embed, view=view)
 
 # --- RANKING ---
-@bot.tree.command(name="ranking", description="Top 10 jugadores del servidor")
+def build_leaderboard_embed(users: dict, category: str) -> discord.Embed:
+    medals = ["🥇","🥈","🥉"] + ["🔸"]*7
+
+    if category == "wins":
+        title = "🏆 Leaderboard — Victorias"
+        color = 0xf1c40f
+        sorted_u = sorted(users.values(), key=lambda u: u.get("wins",0), reverse=True)[:10]
+        def row(u):
+            total = u.get("wins",0) + u.get("losses",0)
+            wr = round(u.get("wins",0)/total*100,1) if total>0 else 0
+            return f"✅ {u.get('wins',0)}V ❌ {u.get('losses',0)}D | WR: **{wr}%**"
+
+    elif category == "coins":
+        title = "💰 Leaderboard — Dinero"
+        color = 0x2ecc71
+        sorted_u = sorted(users.values(), key=lambda u: u.get("coins",0), reverse=True)[:10]
+        def row(u): return f"💰 **{u.get('coins',0):,}** monedas"
+
+    elif category == "figures":
+        title = "🎭 Leaderboard — Figuras"
+        color = 0x9b59b6
+        sorted_u = sorted(users.values(), key=lambda u: len(set(f["key"] for f in u.get("figures",[]))), reverse=True)[:10]
+        def row(u):
+            unique = len(set(f["key"] for f in u.get("figures",[])))
+            total  = len(u.get("figures",[]))
+            return f"🎭 **{unique}** únicas ({total} totales)"
+
+    elif category == "fig_level":
+        title = "⬆️ Leaderboard — Nivel de Figuras"
+        color = 0x3498db
+        def total_fig_lvl(u):
+            return sum(f.get("level",1) for f in u.get("figures",[]))
+        sorted_u = sorted(users.values(), key=total_fig_lvl, reverse=True)[:10]
+        def row(u):
+            lvls = [f.get("level",1) for f in u.get("figures",[])]
+            return f"⬆️ Niveles totales: **{sum(lvls)}** | Máx: **{max(lvls) if lvls else 0}**"
+    else:
+        return discord.Embed(title="❌ Categoría desconocida", color=0xe74c3c)
+
+    embed = discord.Embed(title=title, color=color)
+    for i, u in enumerate(sorted_u):
+        embed.add_field(
+            name=f"{medals[i]} {u.get('name','?')} (Nv.{u.get('level',1)})",
+            value=row(u),
+            inline=False
+        )
+    return embed
+
+@bot.tree.command(name="ranking", description="Leaderboards del servidor — elige la categoría")
 async def ranking(interaction: discord.Interaction):
     db = load_db()
     users = db.get("users", {})
@@ -3689,23 +4204,28 @@ async def ranking(interaction: discord.Interaction):
         await interaction.response.send_message("📭 Nadie registrado aún.", ephemeral=True)
         return
 
-    sorted_users = sorted(users.values(), key=lambda u: u.get("wins", 0), reverse=True)[:10]
+    # Mostrar con botones de selección de categoría
+    async def send_lb(inter: discord.Interaction, category: str, edit=False):
+        embed = build_leaderboard_embed(users, category)
+        view = discord.ui.View(timeout=120)
+        cats = [("wins","🏆 Victorias"),("coins","💰 Dinero"),("figures","🎭 Figuras"),("fig_level","⬆️ Niveles")]
+        for cat_id, cat_label in cats:
+            btn = discord.ui.Button(
+                label=cat_label,
+                style=discord.ButtonStyle.primary if cat_id == category else discord.ButtonStyle.secondary,
+                custom_id=f"lb_{cat_id}"
+            )
+            async def cb(i: discord.Interaction, c=cat_id):
+                db2 = load_db()
+                await send_lb(i, c, edit=True)
+            btn.callback = cb
+            view.add_item(btn)
+        if edit:
+            await inter.response.edit_message(embed=embed, view=view)
+        else:
+            await inter.response.send_message(embed=embed, view=view)
 
-    embed = discord.Embed(title="🏆 Ranking del Androide del PvP", color=0xf1c40f)
-    medals = ["🥇", "🥈", "🥉"] + ["🔸"] * 7
-
-    for i, u in enumerate(sorted_users):
-        winrate = 0
-        total = u.get("wins", 0) + u.get("losses", 0)
-        if total > 0:
-            winrate = round((u.get("wins", 0) / total) * 100, 1)
-        embed.add_field(
-            name=f"{medals[i]} {u['name']} (Nv.{u.get('level',1)})",
-            value=f"✅ {u.get('wins',0)}V / ❌ {u.get('losses',0)}D | WR: {winrate}% | 💰 {u.get('coins',0):,}",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed)
+    await send_lb(interaction, "wins")
 
 # --- RECOMPENSA DIARIA ---
 DAILY_MAX_STREAK = 7
@@ -3986,30 +4506,50 @@ def is_admin(interaction: discord.Interaction) -> bool:
         return interaction.user.guild_permissions.administrator
     return False
 
-# --- RESET (cualquier usuario, solo afecta su canal) ---
-@bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
+# --- RESET (cualquier usuario puede usarlo en su canal) ---
+@bot.tree.command(name="reset", description="Reinicia la batalla o sala multijugador activa en este canal")
 async def reset_battle(interaction: discord.Interaction):
-    if not is_admin(interaction):
-        await interaction.response.send_message("❌ Solo los admins pueden reiniciar batallas.", ephemeral=True)
-        return
     removed = False
-    if interaction.channel_id in active_battles:
-        del active_battles[interaction.channel_id]
+    channel_id = interaction.channel_id
+
+    if channel_id in active_battles:
+        battle = active_battles[channel_id]
+        # Solo el jugador involucrado o un admin puede resetear
+        uid = interaction.user.id
+        if uid != battle.p1 and uid != battle.p2 and not is_admin(interaction):
+            await interaction.response.send_message("❌ Solo los jugadores de esta batalla o un admin pueden resetearla.", ephemeral=True)
+            return
+        del active_battles[channel_id]
         removed = True
+
+    if channel_id in active_multiplayer:
+        sess = active_multiplayer[channel_id]
+        uid = interaction.user.id
+        if uid not in sess.players and not is_admin(interaction):
+            await interaction.response.send_message("❌ Solo los jugadores de esta sala o un admin pueden resetearla.", ephemeral=True)
+            return
+        del active_multiplayer[channel_id]
+        removed = True
+
+    if channel_id in active_mp_battles:
+        del active_mp_battles[channel_id]
+        removed = True
+
     # Limpiar también peleas PvP pendientes en este canal
-    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == interaction.channel_id]
+    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == channel_id]
     for k in to_remove:
         del pending_pvp[k]
         removed = True
+
     if removed:
         embed = discord.Embed(
-            title="🔄 Batalla reiniciada",
-            description="La batalla activa en este canal ha sido cancelada. ¡Podéis iniciar una nueva!",
+            title="🔄 ¡Canal reiniciado!",
+            description="La batalla o sala activa ha sido cancelada. ¡Podéis iniciar una nueva con `/pvpbot`, `/retar` o `/multiplayer`!",
             color=0x3498db
         )
         await interaction.response.send_message(embed=embed)
     else:
-        await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
+        await interaction.response.send_message("❌ No hay ninguna batalla o sala activa en este canal.", ephemeral=True)
 
 # --- BOMB (solo admins) ---
 @bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
@@ -4474,6 +5014,49 @@ async def ingredientes_cmd(interaction: discord.Interaction):
     embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.command(name="recetas", description="Ver tus hojas de receta descubiertas y todas las recetas disponibles")
+async def recetas_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    known_sheets = set(user.get("recipe_sheets", []))
+    embed = discord.Embed(
+        title="📜 Libro de Recetas",
+        description="Las recetas marcadas con ✅ las conoces (por hoja de receta o ya las cocinaste).\nLas marcadas con ❓ aún no las has descubierto.\n\n**Todas las recetas requieren 🦞 Langosta + ingredientes.**",
+        color=0xe67e22
+    )
+
+    effect_emoji = {
+        "coins_boost": "💰",
+        "hp_boost": "❤️",
+        "atk_boost": "⚔️",
+        "xp_boost": "✨",
+        "level_fig": "⬆️",
+    }
+
+    for i, recipe in enumerate(RECIPES):
+        known = i in known_sheets
+        icon = "✅" if known else "❓"
+        if known:
+            ings = " + ".join(recipe["ingredients"][1:])  # sin langosta (ya sabemos que va)
+            embed.add_field(
+                name=f"{icon} {recipe['name']}",
+                value=f"Ingredientes: 🦞 + {ings}\n{effect_emoji.get(recipe['effect'],'⭐')} {recipe['desc']}",
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name=f"{icon} Receta desconocida #{i+1}",
+                value="_¡Encuentra la hoja de receta explorando!_",
+                inline=False
+            )
+
+    embed.set_footer(text=f"Hojas descubiertas: {len(known_sheets)}/{len(RECIPES)} | Explora para encontrar más!")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
 async def cook_cmd(interaction: discord.Interaction):
     global global_recipe_count, lobster_madre_active
@@ -4553,14 +5136,28 @@ async def cook_cmd(interaction: discord.Interaction):
             for ing in state["selected"]:
                 ings2[ing] -= 1
             user2["ingredients"] = ings2
-            # Buscar receta
+            # Buscar receta - primero en hojas de receta desbloqueadas
             matched = None
+            # Verificar recetas normales
             for recipe in RECIPES:
                 recipe_ings = set(recipe["ingredients"])
                 used = set(["🦞"] + state["selected"])
                 if recipe_ings == used:
                     matched = recipe
                     break
+
+            # Verificar hojas de receta descubiertas
+            known_sheets = user2.get("recipe_sheets", [])
+            if not matched:
+                for idx in known_sheets:
+                    if idx < len(RECIPES):
+                        recipe = RECIPES[idx]
+                        recipe_ings = set(recipe["ingredients"])
+                        used = set(["🦞"] + state["selected"])
+                        if recipe_ings == used:
+                            matched = recipe
+                            break
+
             global_recipe_count += 1
             if "recipe_count" not in user2:
                 user2["recipe_count"] = 0
@@ -4574,21 +5171,26 @@ async def cook_cmd(interaction: discord.Interaction):
                 if matched["effect"] == "level_fig":
                     team = user2.get("team", [])
                     if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
-                        user2["figures"][team[0]]["level"] = user2["figures"][team[0]].get("level", 1) + 1
+                        fig_to_level = user2["figures"][team[0]]
+                        if fig_to_level.get("level", 1) < FIGURE_LEVEL_MAX:
+                            fig_to_level["level"] = fig_to_level.get("level", 1) + 1
                 result_desc = matched["desc"]
                 recipe_name = matched["name"]
+                embed2 = discord.Embed(
+                    title=f"✅ {recipe_name}",
+                    description=result_desc,
+                    color=0x2ecc71
+                )
             else:
-                # Receta desconocida: monedas aleatorias
-                coins = random.randint(50, 200)
-                user2["coins"] = user2.get("coins", 0) + coins
-                recipe_name = "🍲 Receta Experimental"
-                result_desc = f"No es receta conocida, pero huele bien. +{coins}🪙"
+                # Receta sin sinergia: FALLIDA — no da beneficios
+                recipe_name = "💀 Receta Fallida"
+                result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta que te enseñen combinaciones ganadoras._"
+                embed2 = discord.Embed(
+                    title=f"❌ {recipe_name}",
+                    description=result_desc,
+                    color=0xe74c3c
+                )
             save_db(db2)
-            embed2 = discord.Embed(
-                title=f"✅ {recipe_name}",
-                description=result_desc,
-                color=0x2ecc71
-            )
             embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
             await ci.response.edit_message(embed=embed2, view=None)
             # ¿Langosta Madre?
@@ -4753,6 +5355,51 @@ async def run_lobster_madre_battle(channel, msg):
             color=0xe74c3c
         )
     await channel.send(embed=embed)
+
+
+def _make_stat_up_view(fig_data: dict, fig_key: str, user_data: dict, user_id: int, db) -> discord.ui.View:
+    """Crea la view de selección de stat para el level up. Sin async."""
+    view = discord.ui.View(timeout=60)
+    stats = [("hp","❤️ HP"),("attack","⚔️ ATK"),("defense","🛡️ DEF"),("speed","⚡ VEL")]
+    for stat_key, stat_label in stats:
+        btn = discord.ui.Button(label=f"{stat_label} +2", style=discord.ButtonStyle.primary, custom_id=f"su_{stat_key}_{fig_key}")
+        async def cb(inter: discord.Interaction, sk=stat_key, fk=fig_key, uid=user_id):
+            if inter.user.id != uid:
+                await inter.response.send_message("❌ No es tu elección.", ephemeral=True)
+                return
+            db2 = load_db()
+            u2 = get_user(db2, uid)
+            target = next((f for f in u2.get("figures",[]) if f.get("key")==fk and f.get("pending_stat_up",0)>0), None)
+            if not target:
+                await inter.response.edit_message(content="✅ Ya procesado.", embed=None, view=None)
+                return
+            if "stat_ups" not in target: target["stat_ups"] = {}
+            target["stat_ups"][sk] = target["stat_ups"].get(sk,0) + 2
+            target["pending_stat_up"] = target.get("pending_stat_up",0) - 1
+            save_db(db2)
+            fig_base = FIGURES.get(fk,{})
+            ok_embed = discord.Embed(
+                title=f"✅ ¡+2 {sk.upper()} a {fig_base.get('name',fk)}!",
+                description=f"Tu figura ahora tiene **+{target['stat_ups'].get(sk,0)}** de bonus en {sk}.",
+                color=0x2ecc71
+            )
+            await inter.response.edit_message(embed=ok_embed, view=None)
+            # Si quedan más pendientes, mostrar otro menú
+            if target.get("pending_stat_up",0) > 0:
+                db3 = load_db()
+                u3 = get_user(db3, uid)
+                t2 = next((f for f in u3.get("figures",[]) if f.get("key")==fk and f.get("pending_stat_up",0)>0), None)
+                if t2:
+                    v2 = _make_stat_up_view(t2, fk, u3, uid, db3)
+                    again_embed = discord.Embed(
+                        title=f"⬆️ ¡{fig_base.get('emoji','')} {fig_base.get('name',fk)} subió otro nivel!",
+                        description="Elige otro stat:",
+                        color=0xf1c40f
+                    )
+                    await inter.followup.send(embed=again_embed, view=v2)
+        btn.callback = cb
+        view.add_item(btn)
+    return view
 
 # ============================================================
 #  SISTEMA DE LEVEL UP CON ELECCIÓN DE STAT (figuras)
@@ -5103,11 +5750,14 @@ EXPLORATION_REWARDS = [
 ]
 
 RECIPE_SHEETS = [
-    {"name": "📜 Hoja: Langosta Picante",   "recipe_idx": 0},
-    {"name": "📜 Hoja: Estofado de Langosta","recipe_idx": 1},
-    {"name": "📜 Hoja: Langosta Gourmet",   "recipe_idx": 2},
-    {"name": "📜 Hoja: Langosta con Queso", "recipe_idx": 3},
-    {"name": "📜 Hoja: Langosta Dulce",     "recipe_idx": 4},
+    {"name": "📜 Hoja: Langosta Picante",    "recipe_idx": 0},
+    {"name": "📜 Hoja: Estofado de Langosta", "recipe_idx": 1},
+    {"name": "📜 Hoja: Langosta Gourmet",    "recipe_idx": 2},
+    {"name": "📜 Hoja: Langosta con Queso",  "recipe_idx": 3},
+    {"name": "📜 Hoja: Langosta Dulce",      "recipe_idx": 4},
+    {"name": "📜 Hoja: Langosta Tradicional","recipe_idx": 5},
+    {"name": "📜 Hoja: Langosta a la Brasa", "recipe_idx": 6},
+    {"name": "📜 Hoja: Langosta Explosiva",  "recipe_idx": 7},
 ]
 
 def pick_exploration_reward(user: dict) -> dict:
