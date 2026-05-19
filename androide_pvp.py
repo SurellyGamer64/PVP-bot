@@ -536,11 +536,13 @@ FIGURE_SKILLS = {
     ],
     "chicken": [
         {
-            "name": "Switch Swords",
+            "name": "Chicken Leg",
             "cost": 30,
-            "type": "switch_sword",  # muestra menú para elegir espada
+            "type": "heal_self_small",  # cura solo a Shedletsky
             "power": 0,
-            "desc": "Shedletsky cambia su tipo de espada, preparándose para el siguiente ataque.",
+            "heal_min": 20,
+            "heal_max": 25,
+            "desc": "Shedletsky saca una pierna de pollo a medio comer, y le pega un mordisco rápido, curándose rápidamente.",
         },
         {
             "name": "Slash",
@@ -1731,6 +1733,15 @@ async def execute_action(interaction, battle: BattleState, skill_idx: int, chann
                 battle.log.append(f"   No había figuras caídas que revivir.")
             battle.log.append(f"   _{skill['desc']}_")
 
+        elif stype == "heal_self_small":
+            # Shedletsky — Chicken Leg: cura solo a sí mismo 20-25 HP
+            heal_amt = random.randint(skill.get("heal_min", 20), skill.get("heal_max", 25))
+            if not attacker.get("no_heal"):
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal_amt)
+            battle.log.append(f"🍗 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💚 {attacker['name']} se cura +{heal_amt}HP")
+            battle.log.append(f"   _{skill['desc']}_")
+
         elif stype == "heal_team_self":
             # Shedletsky — Chicken Legs: +30 propio, +25 aliados
             self_heal = skill["power"]
@@ -2405,6 +2416,15 @@ async def bot_turn(interaction, battle: BattleState, channel_id: int):
                 battle.log.append(f"   No había figuras caídas que revivir.")
             battle.log.append(f"   _{skill['desc']}_")
 
+        elif stype == "heal_self_small":
+            # Shedletsky — Chicken Leg: cura solo a sí mismo 20-25 HP
+            heal_amt = random.randint(skill.get("heal_min", 20), skill.get("heal_max", 25))
+            if not attacker.get("no_heal"):
+                attacker["hp"] = min(attacker["max_hp"], attacker["hp"] + heal_amt)
+            battle.log.append(f"🍗 **{attacker['emoji']} {attacker['name']}** usa **{skill['name']}**!")
+            battle.log.append(f"   💚 {attacker['name']} se cura +{heal_amt}HP")
+            battle.log.append(f"   _{skill['desc']}_")
+
         elif stype == "heal_team_self":
             # Shedletsky — Chicken Legs: +30 propio, +25 aliados
             self_heal = skill["power"]
@@ -2633,14 +2653,18 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
             while winner_data["xp"] >= xp_to_level_up(winner_data["level"]):
                 winner_data["xp"] -= xp_to_level_up(winner_data["level"])
                 winner_data["level"] += 1
-            # XP a las figuras del equipo ganador
+            # XP a las figuras del equipo ganador — con sistema de stat_up
             team_keys = battle.p1_team_keys if p1_won else battle.p2_team_keys
+            leveled_figs = []
             for fig_data in winner_data["figures"]:
                 if fig_data["key"] in team_keys:
-                    fig_data["xp"] = fig_data.get("xp", 0) + XP_PER_WIN // 3
-                    while fig_data["xp"] >= xp_to_level_up(fig_data.get("level", 1)):
-                        fig_data["xp"] -= xp_to_level_up(fig_data.get("level", 1))
-                        fig_data["level"] = fig_data.get("level", 1) + 1
+                    if fig_data.get("level", 1) < FIGURE_LEVEL_MAX:
+                        fig_data["xp"] = fig_data.get("xp", 0) + XP_PER_WIN // 3
+                        if check_figure_levelup(fig_data):
+                            leveled_figs.append(fig_data)
+            if leveled_figs:
+                fig_names = [FIGURES.get(fd["key"], {}).get("name", fd["key"]) for fd in leveled_figs]
+                embed.add_field(name="⬆️ ¡Level Up!", value=f"{'  '.join(fig_names)} subieron de nivel. Usa `/subirstat` para elegir tu mejora.", inline=False)
 
     # Recompensas al perdedor
     if not battle.is_bot or not p1_won:
@@ -2673,6 +2697,19 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
         await interaction.response.edit_message(embed=embed, view=None)
     except Exception:
         await interaction.message.edit(embed=embed, view=None)
+
+    # Drops de misión activa (quest) — post-batalla
+    db3 = load_db()
+    winner3 = get_user(db3, winner_id)
+    if winner3:
+        changed = False
+        for qid in winner3.get("active_quests", []):
+            prev = winner3.get("quest_progress", {}).get(qid, 0)
+            await check_quest_drops(winner3, qid, interaction.channel)
+            if winner3.get("quest_progress", {}).get(qid, 0) != prev:
+                changed = True
+        if changed:
+            save_db(db3)
 
 # ============================================================
 #  COMANDOS
@@ -3952,8 +3989,19 @@ def is_admin(interaction: discord.Interaction) -> bool:
 # --- RESET (cualquier usuario, solo afecta su canal) ---
 @bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
 async def reset_battle(interaction: discord.Interaction):
+    if not is_admin(interaction):
+        await interaction.response.send_message("❌ Solo los admins pueden reiniciar batallas.", ephemeral=True)
+        return
+    removed = False
     if interaction.channel_id in active_battles:
         del active_battles[interaction.channel_id]
+        removed = True
+    # Limpiar también peleas PvP pendientes en este canal
+    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == interaction.channel_id]
+    for k in to_remove:
+        del pending_pvp[k]
+        removed = True
+    if removed:
         embed = discord.Embed(
             title="🔄 Batalla reiniciada",
             description="La batalla activa en este canal ha sido cancelada. ¡Podéis iniciar una nueva!",
@@ -4030,12 +4078,12 @@ async def rob(interaction: discord.Interaction, usuario: discord.Member):
     cd_key = interaction.user.id
     if cd_key in ROB_COOLDOWN:
         diff = now - ROB_COOLDOWN[cd_key]
-        if diff < 7200:  # 2 horas
-            restante = int(7200 - diff)
-            h = restante // 3600
-            m = (restante % 3600) // 60
+        if diff < 600:  # 10 minutos
+            restante = int(600 - diff)
+            m = restante // 60
+            s = restante % 60
             await interaction.response.send_message(
-                f"⏰ Cooldown activo. Puedes robar de nuevo en **{h}h {m}m**.", ephemeral=True
+                f"⏰ Cooldown activo. Puedes robar de nuevo en **{m}m {s}s**.", ephemeral=True
             )
             return
 
@@ -4707,6 +4755,1080 @@ async def run_lobster_madre_battle(channel, msg):
     await channel.send(embed=embed)
 
 # ============================================================
+#  SISTEMA DE LEVEL UP CON ELECCIÓN DE STAT (figuras)
+# ============================================================
+FIGURE_LEVEL_MAX = 50
+
+def check_figure_levelup(fig_data, interaction_hook=None):
+    """
+    Verifica si una figura subió de nivel y devuelve (leveled_up, new_level).
+    fig_data es el dict de la figura del usuario (con key, level, xp, stat_ups).
+    """
+    leveled = False
+    while fig_data.get("level", 1) < FIGURE_LEVEL_MAX:
+        needed = xp_to_level_up(fig_data.get("level", 1))
+        if fig_data.get("xp", 0) >= needed:
+            fig_data["xp"] -= needed
+            fig_data["level"] = fig_data.get("level", 1) + 1
+            if "pending_stat_up" not in fig_data:
+                fig_data["pending_stat_up"] = 0
+            fig_data["pending_stat_up"] = fig_data.get("pending_stat_up", 0) + 1
+            leveled = True
+        else:
+            break
+    return leveled
+
+async def prompt_stat_up(interaction: discord.Interaction, fig_data: dict, fig_key: str, db):
+    """Muestra un menú para elegir qué stat subir (+2) al subir de nivel."""
+    pending = fig_data.get("pending_stat_up", 0)
+    if pending <= 0:
+        return
+    fig_base = FIGURES.get(fig_key, {})
+    fig_name = fig_base.get("name", fig_key)
+    fig_emoji = fig_base.get("emoji", "🎭")
+    lvl = fig_data.get("level", 1)
+
+    embed = discord.Embed(
+        title=f"⬆️ ¡{fig_emoji} {fig_name} subió al nivel {lvl}!",
+        description="Elige **qué stat subir +2**:",
+        color=0xf1c40f
+    )
+    view = discord.ui.View(timeout=60)
+    stats = [("hp", "❤️ HP"), ("attack", "⚔️ ATK"), ("defense", "🛡️ DEF"), ("speed", "⚡ VEL")]
+    user_id = interaction.user.id
+
+    async def make_callback(stat_key, stat_label):
+        async def callback(inter: discord.Interaction):
+            if inter.user.id != user_id:
+                await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            db2 = load_db()
+            u2 = get_user(db2, user_id)
+            if not u2:
+                await inter.response.send_message("❌ Error al cargar tu perfil.", ephemeral=True)
+                return
+            # Encontrar la figura correcta
+            target = next((f for f in u2.get("figures", []) if f.get("key") == fig_key and f.get("pending_stat_up", 0) > 0), None)
+            if not target:
+                await inter.response.edit_message(content="✅ Ya fue procesado.", embed=None, view=None)
+                return
+            if "stat_ups" not in target:
+                target["stat_ups"] = {}
+            target["stat_ups"][stat_key] = target["stat_ups"].get(stat_key, 0) + 2
+            target["pending_stat_up"] = target.get("pending_stat_up", 0) - 1
+            save_db(db2)
+            result_embed = discord.Embed(
+                title=f"✅ {fig_emoji} {fig_name} — stat mejorado",
+                description=f"**{stat_label} +2** permanente! (Nv.{target.get('level',1)})",
+                color=0x2ecc71
+            )
+            await inter.response.edit_message(embed=result_embed, view=None)
+            # Si quedan más pending, volver a preguntar
+            if target.get("pending_stat_up", 0) > 0:
+                await asyncio.sleep(1)
+                await prompt_stat_up(inter, target, fig_key, db2)
+        return callback
+
+    for stat_key, stat_label in stats:
+        btn = discord.ui.Button(label=stat_label, style=discord.ButtonStyle.primary)
+        btn.callback = await make_callback(stat_key, stat_label)
+        view.add_item(btn)
+
+    try:
+        if hasattr(interaction, 'followup'):
+            await interaction.followup.send(embed=embed, view=view)
+        else:
+            await interaction.channel.send(embed=embed, view=view)
+    except Exception:
+        pass
+
+# ============================================================
+#  LEADERBOARDS EXPANDIDOS
+# ============================================================
+@bot.tree.command(name="leaderboard", description="Ver los rankings del servidor")
+async def leaderboard_cmd(interaction: discord.Interaction):
+    view = discord.ui.View(timeout=60)
+
+    async def make_lb_callback(lb_type):
+        async def callback(inter: discord.Interaction):
+            db = load_db()
+            users = list(db.get("users", {}).items())
+            if not users:
+                await inter.response.send_message("📭 Nadie registrado aún.", ephemeral=True)
+                return
+            medals = ["🥇", "🥈", "🥉"] + ["🔸"] * 17
+
+            if lb_type == "wins":
+                sorted_u = sorted(users, key=lambda x: x[1].get("wins", 0), reverse=True)[:10]
+                embed = discord.Embed(title="🏆 Top Victorias", color=0xf1c40f)
+                for i, (uid, u) in enumerate(sorted_u):
+                    total = u.get("wins", 0) + u.get("losses", 0)
+                    wr = round(u["wins"] / total * 100, 1) if total > 0 else 0
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"✅ {u.get('wins',0)}V ❌ {u.get('losses',0)}D | WR: **{wr}%**",
+                        inline=False
+                    )
+
+            elif lb_type == "coins":
+                sorted_u = sorted(users, key=lambda x: x[1].get("coins", 0), reverse=True)[:10]
+                embed = discord.Embed(title="💰 Top Riqueza", color=0xf1c40f)
+                for i, (uid, u) in enumerate(sorted_u):
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"💰 **{u.get('coins',0):,}** monedas",
+                        inline=False
+                    )
+
+            elif lb_type == "figures":
+                sorted_u = sorted(users, key=lambda x: len(x[1].get("figures", [])), reverse=True)[:10]
+                embed = discord.Embed(title="🎭 Top Coleccionistas", color=0x9b59b6)
+                for i, (uid, u) in enumerate(sorted_u):
+                    unique = len({f["key"] for f in u.get("figures", [])})
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"🎭 **{len(u.get('figures',[]))}** figuras ({unique} únicas)",
+                        inline=False
+                    )
+
+            elif lb_type == "figlevels":
+                def total_fig_levels(u):
+                    return sum(f.get("level", 1) for f in u.get("figures", []))
+                sorted_u = sorted(users, key=lambda x: total_fig_levels(x[1]), reverse=True)[:10]
+                embed = discord.Embed(title="⬆️ Top Niveles de Figuras", color=0x2ecc71)
+                for i, (uid, u) in enumerate(sorted_u):
+                    total_lvl = total_fig_levels(u)
+                    avg = round(total_lvl / max(1, len(u.get("figures", []))), 1)
+                    embed.add_field(
+                        name=f"{medals[i]} {u['name']}",
+                        value=f"⬆️ Suma niveles: **{total_lvl}** | Promedio: **{avg}**",
+                        inline=False
+                    )
+
+            await inter.response.edit_message(embed=embed, view=view)
+        return callback
+
+    btn_wins    = discord.ui.Button(label="🏆 Victorias",   style=discord.ButtonStyle.primary)
+    btn_coins   = discord.ui.Button(label="💰 Riqueza",     style=discord.ButtonStyle.primary)
+    btn_figs    = discord.ui.Button(label="🎭 Figuras",     style=discord.ButtonStyle.primary)
+    btn_levels  = discord.ui.Button(label="⬆️ Niv. Figs",  style=discord.ButtonStyle.primary)
+
+    btn_wins.callback   = await make_lb_callback("wins")
+    btn_coins.callback  = await make_lb_callback("coins")
+    btn_figs.callback   = await make_lb_callback("figures")
+    btn_levels.callback = await make_lb_callback("figlevels")
+
+    for btn in [btn_wins, btn_coins, btn_figs, btn_levels]:
+        view.add_item(btn)
+
+    db = load_db()
+    users = list(db.get("users", {}).items())
+    sorted_u = sorted(users, key=lambda x: x[1].get("wins", 0), reverse=True)[:10]
+    medals = ["🥇", "🥈", "🥉"] + ["🔸"] * 7
+    embed = discord.Embed(title="🏆 Top Victorias", color=0xf1c40f)
+    for i, (uid, u) in enumerate(sorted_u):
+        total = u.get("wins", 0) + u.get("losses", 0)
+        wr = round(u["wins"] / total * 100, 1) if total > 0 else 0
+        embed.add_field(
+            name=f"{medals[i]} {u['name']}",
+            value=f"✅ {u.get('wins',0)}V ❌ {u.get('losses',0)}D | WR: **{wr}%**",
+            inline=False
+        )
+    await interaction.response.send_message(embed=embed, view=view)
+
+# ============================================================
+#  PERFIL DE OTROS USUARIOS
+# ============================================================
+@bot.tree.command(name="verPerfil", description="Ver el perfil de otro usuario")
+@app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
+async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
+    db = load_db()
+    u = get_user(db, usuario.id)
+    if not u:
+        await interaction.response.send_message(f"❌ {usuario.display_name} no está registrado.", ephemeral=True)
+        return
+    total = u.get("wins", 0) + u.get("losses", 0)
+    wr = round(u["wins"] / total * 100, 1) if total > 0 else 0
+    lvl = u.get("level", 1)
+    xp = u.get("xp", 0)
+    needed = xp_to_level_up(lvl)
+    embed = discord.Embed(title=f"👤 Perfil de {u['name']}", color=0x3498db)
+    embed.add_field(name="🏆 Nivel", value=lvl, inline=True)
+    embed.add_field(name="✨ XP", value=f"{xp}/{needed}", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{u.get('coins',0):,}", inline=True)
+    embed.add_field(name="✅ Victorias", value=u.get("wins", 0), inline=True)
+    embed.add_field(name="❌ Derrotas", value=u.get("losses", 0), inline=True)
+    embed.add_field(name="📊 Win Rate", value=f"{wr}%", inline=True)
+    embed.add_field(name="🎭 Figuras", value=len(u.get("figures", [])), inline=True)
+    team_keys = [u.get("figures", [])[i]["key"] if i < len(u.get("figures", [])) else None
+                 for i in (u.get("team", [None, None, None]) or [None, None, None])]
+    team_str = " | ".join(FIGURES[k]["emoji"] + " " + FIGURES[k]["name"] if k and k in FIGURES else "—" for k in team_keys)
+    embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="verFiguras", description="Ver las figuras de otro usuario")
+@app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
+async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
+    db = load_db()
+    u = get_user(db, usuario.id)
+    if not u or not u.get("figures"):
+        await interaction.response.send_message(f"❌ {usuario.display_name} no tiene figuras o no está registrado.", ephemeral=True)
+        return
+    embed = discord.Embed(title=f"🎭 Figuras de {u['name']}", color=0x9b59b6)
+    seen = {}
+    for fd in u["figures"]:
+        k = fd.get("key")
+        if k not in seen or fd.get("level", 1) > seen[k].get("level", 1):
+            seen[k] = fd
+    for k, fd in seen.items():
+        fig = FIGURES.get(k)
+        if not fig:
+            continue
+        lvl = fd.get("level", 1)
+        xp = fd.get("xp", 0)
+        stat_ups = fd.get("stat_ups", {})
+        sup_str = " ".join(f"+{v}{s}" for s, v in stat_ups.items()) if stat_ups else ""
+        embed.add_field(
+            name=f"{fig['emoji']} {fig['name']} Nv.{lvl}",
+            value=f"❤️{apply_level_bonus(fig['hp'],lvl)+stat_ups.get('hp',0)} ⚔️{apply_level_bonus(fig['attack'],lvl)+stat_ups.get('attack',0)} 🛡️{apply_level_bonus(fig['defense'],lvl)+stat_ups.get('defense',0)} ⚡{apply_level_bonus(fig['speed'],lvl)+stat_ups.get('speed',0)}\nXP: {xp}/{xp_to_level_up(lvl)} {sup_str}",
+            inline=True
+        )
+    await interaction.response.send_message(embed=embed)
+
+# ============================================================
+#  SISTEMA DE MISIONES (/quest)
+# ============================================================
+QUESTS = {
+    "documentos_jane": {
+        "name": "📄 Documentos de Jane",
+        "desc": "Jane Doe escondió sus documentos de identidad. Consigue 6 documentos ganando batallas para desbloquear la posibilidad de comprarla.",
+        "goal": 6,
+        "progress_key": "docs_collected",
+        "reward_key": "jane_unlocked",
+        "reward_desc": "🔓 ¡Jane Doe desbloqueada en la tienda!",
+        "drop_chance": 60,  # % de chance de documento al ganar batalla
+    },
+}
+
+def is_quest_unlocked(user: dict, quest_id: str) -> bool:
+    return user.get("quests_completed", {}).get(quest_id, False)
+
+def get_quest_progress(user: dict, quest_id: str) -> int:
+    return user.get("quest_progress", {}).get(quest_id, 0)
+
+async def check_quest_drops(user: dict, quest_id: str, channel):
+    """Llamar tras ganar una batalla para ver si cae progreso de misión."""
+    quest = QUESTS.get(quest_id)
+    if not quest:
+        return
+    if is_quest_unlocked(user, quest_id):
+        return
+    active = user.get("active_quests", [])
+    if quest_id not in active:
+        return
+    if random.randint(1, 100) <= quest["drop_chance"]:
+        if "quest_progress" not in user:
+            user["quest_progress"] = {}
+        user["quest_progress"][quest_id] = user["quest_progress"].get(quest_id, 0) + 1
+        prog = user["quest_progress"][quest_id]
+        goal = quest["goal"]
+        await channel.send(f"📄 **¡Documento encontrado!** ({prog}/{goal}) — Misión: {quest['name']}")
+        if prog >= goal:
+            if "quests_completed" not in user:
+                user["quests_completed"] = {}
+            user["quests_completed"][quest_id] = True
+            await channel.send(f"🎉 **¡Misión completada!** {quest['name']}\n{quest['reward_desc']}")
+
+@bot.tree.command(name="quest", description="Ver y activar misiones disponibles")
+async def quest_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title="📋 Misiones disponibles", color=0xe67e22)
+    view = discord.ui.View(timeout=60)
+
+    for qid, quest in QUESTS.items():
+        completed = is_quest_unlocked(user, qid)
+        active = qid in user.get("active_quests", [])
+        prog = get_quest_progress(user, qid)
+        goal = quest["goal"]
+
+        if completed:
+            status = f"✅ Completada"
+        elif active:
+            status = f"🔄 En progreso: {prog}/{goal}"
+        else:
+            status = "❌ Inactiva"
+
+        embed.add_field(
+            name=f"{quest['name']} — {status}",
+            value=f"{quest['desc']}\n**Recompensa:** {quest['reward_desc']}",
+            inline=False
+        )
+
+        if not completed and not active:
+            btn = discord.ui.Button(label=f"Activar: {quest['name']}", style=discord.ButtonStyle.success)
+            async def make_activate(quest_id):
+                async def activate(inter: discord.Interaction):
+                    if inter.user.id != interaction.user.id:
+                        await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                        return
+                    db2 = load_db()
+                    u2 = get_user(db2, inter.user.id)
+                    if "active_quests" not in u2:
+                        u2["active_quests"] = []
+                    if quest_id not in u2["active_quests"]:
+                        u2["active_quests"].append(quest_id)
+                    save_db(db2)
+                    await inter.response.send_message(f"✅ ¡Misión **{QUESTS[quest_id]['name']}** activada! Gana batallas para progresar.", ephemeral=True)
+                return activate
+            btn.callback = await make_activate(qid)
+            view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
+# ============================================================
+#  SISTEMA DE EXPLORACIÓN (/exploracion)
+# ============================================================
+EXPLORATION_DURATION = 30 * 60  # 30 minutos en segundos
+EXPLORATION_REWARDS = [
+    {"type": "coins",      "weight": 35, "min": 100, "max": 400},
+    {"type": "ingredient", "weight": 30},
+    {"type": "xp_fig",    "weight": 20, "value": 80},
+    {"type": "recipe_sheet","weight": 10},
+    {"type": "figure",     "weight": 5},
+]
+
+RECIPE_SHEETS = [
+    {"name": "📜 Hoja: Langosta Picante",   "recipe_idx": 0},
+    {"name": "📜 Hoja: Estofado de Langosta","recipe_idx": 1},
+    {"name": "📜 Hoja: Langosta Gourmet",   "recipe_idx": 2},
+    {"name": "📜 Hoja: Langosta con Queso", "recipe_idx": 3},
+    {"name": "📜 Hoja: Langosta Dulce",     "recipe_idx": 4},
+]
+
+def pick_exploration_reward(user: dict) -> dict:
+    """Elige una recompensa de exploración según los pesos."""
+    total = sum(r["weight"] for r in EXPLORATION_REWARDS)
+    roll = random.randint(1, total)
+    acc = 0
+    for reward in EXPLORATION_REWARDS:
+        acc += reward["weight"]
+        if roll <= acc:
+            if reward["type"] == "coins":
+                amount = random.randint(reward["min"], reward["max"])
+                user["coins"] = user.get("coins", 0) + amount
+                return {"type": "coins", "desc": f"💰 +{amount} monedas"}
+            elif reward["type"] == "ingredient":
+                non_lobster = [k for k in INGREDIENTS if k != "🦞"]
+                ing = random.choice(non_lobster)
+                if "ingredients" not in user:
+                    user["ingredients"] = {}
+                user["ingredients"][ing] = user["ingredients"].get(ing, 0) + 1
+                return {"type": "ingredient", "desc": f"{ing} {INGREDIENTS.get(ing, 'Ingrediente')} x1"}
+            elif reward["type"] == "xp_fig":
+                return {"type": "xp_fig", "desc": f"✨ +{reward['value']} XP a tus figuras exploradoras"}
+            elif reward["type"] == "recipe_sheet":
+                sheet = random.choice(RECIPE_SHEETS)
+                if "recipe_sheets" not in user:
+                    user["recipe_sheets"] = []
+                user["recipe_sheets"].append(sheet["recipe_idx"])
+                return {"type": "recipe_sheet", "desc": f"📜 ¡Hoja de receta: {sheet['name']}!"}
+            elif reward["type"] == "figure":
+                buyable = [k for k, v in FIGURES.items() if v.get("price", 0) > 0 and k not in ("roblox_boss", "janedoe") or is_quest_unlocked(user, "documentos_jane")]
+                if buyable:
+                    fig_key = random.choice(buyable)
+                    user["figures"].append({"key": fig_key, "level": 1, "xp": 0})
+                    fig = FIGURES[fig_key]
+                    return {"type": "figure", "desc": f"🎭 ¡Encontraste a **{fig['emoji']} {fig['name']}**!"}
+                else:
+                    user["coins"] = user.get("coins", 0) + 200
+                    return {"type": "coins", "desc": "💰 +200 monedas (sin figuras disponibles)"}
+    return {"type": "nothing", "desc": "Nada especial..."}
+
+@bot.tree.command(name="exploracion", description="Manda 3 figuras a explorar (30 min) para conseguir recompensas")
+async def exploracion_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Ver si ya hay exploración activa
+    exp = user.get("exploration")
+    now = time.time()
+    if exp and now < exp.get("end_time", 0):
+        remaining = int(exp["end_time"] - now)
+        m, s = divmod(remaining, 60)
+        fig_names = [FIGURES.get(k, {}).get("name", k) for k in exp.get("fig_keys", [])]
+        embed = discord.Embed(
+            title="🗺️ Exploración en curso",
+            description=f"Tus figuras **{', '.join(fig_names)}** regresan en **{m}m {s}s**.",
+            color=0x2ecc71
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+
+    # Recoger resultados si ya terminó
+    if exp and now >= exp.get("end_time", 0):
+        rewards = []
+        db2 = load_db()
+        u2 = get_user(db2, interaction.user.id)
+        for fig_key in exp.get("fig_keys", []):
+            reward = pick_exploration_reward(u2)
+            rewards.append(reward)
+            # XP a las figuras exploradoras
+            for fd in u2.get("figures", []):
+                if fd.get("key") == fig_key:
+                    fd["xp"] = fd.get("xp", 0) + 60
+                    if check_figure_levelup(fd):
+                        pass  # Se notificará al usuario al entrar al perfil
+                    break
+        u2["exploration"] = None
+        save_db(db2)
+        embed = discord.Embed(title="🎒 ¡Tu equipo regresó de la exploración!", color=0xf1c40f)
+        for i, r in enumerate(rewards):
+            fig_key = exp["fig_keys"][i] if i < len(exp["fig_keys"]) else "?"
+            fig_name = FIGURES.get(fig_key, {}).get("name", fig_key)
+            embed.add_field(name=f"🗺️ {fig_name} encontró:", value=r["desc"], inline=False)
+        await interaction.response.send_message(embed=embed)
+        return
+
+    # Elegir figuras para explorar
+    figs = user.get("figures", [])
+    exploring_keys = [f["key"] for f in (user.get("exploration", {}) or {}).get("fig_keys", [])]
+    team_indices = user.get("team", [])
+
+    # Filtrar figuras disponibles (no en exploración activa)
+    available_figs = []
+    seen_keys = set()
+    for i, fd in enumerate(figs):
+        k = fd.get("key")
+        if k and k not in seen_keys and k not in exploring_keys:
+            seen_keys.add(k)
+            available_figs.append((i, fd))
+
+    if len(available_figs) < 1:
+        await interaction.response.send_message("❌ No tienes figuras disponibles para explorar.", ephemeral=True)
+        return
+
+    options = []
+    for idx, fd in available_figs[:25]:
+        fig = FIGURES.get(fd["key"])
+        if fig:
+            raw_emoji = fig["emoji"]
+            emoji_obj = discord.PartialEmoji.from_str(raw_emoji) if raw_emoji.startswith("<") else raw_emoji
+            opt = discord.SelectOption(
+                label=f"{fig['name']} Nv.{fd.get('level',1)}",
+                value=fd["key"],
+                description=f"{fig['rarity'].upper()} | HP:{fig['hp']} ATK:{fig['attack']}"
+            )
+            try:
+                opt.emoji = emoji_obj
+            except Exception:
+                pass
+            options.append(opt)
+
+    state = {"selected": [], "user_id": interaction.user.id}
+
+    async def show_exp_menu(inter, is_first=False):
+        embed = discord.Embed(
+            title="🗺️ Preparar Exploración",
+            description=f"Elige hasta 3 figuras para explorar **(30 minutos)**.\nNo podrán batallar durante la exploración.\n\nSeleccionadas: **{', '.join(FIGURES.get(k,{}).get('name',k) for k in state['selected']) or 'Ninguna'}**",
+            color=0x2ecc71
+        )
+        view = discord.ui.View(timeout=60)
+        sel = discord.ui.Select(placeholder="Elige una figura...", options=options, max_values=1)
+
+        async def add_fig(si: discord.Interaction):
+            if si.user.id != state["user_id"]:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            k = sel.values[0]
+            if k in state["selected"]:
+                await si.response.send_message("⚠️ Ya seleccionaste esa figura.", ephemeral=True)
+                return
+            if len(state["selected"]) >= 3:
+                await si.response.send_message("❌ Máximo 3 figuras.", ephemeral=True)
+                return
+            state["selected"].append(k)
+            new_embed = discord.Embed(
+                title="🗺️ Preparar Exploración",
+                description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in state['selected'])}**\n\nAñade más o pulsa **¡Explorar!**",
+                color=0x2ecc71
+            )
+            await si.response.edit_message(embed=new_embed, view=build_exp_view(state))
+        sel.callback = add_fig
+        view.add_item(sel)
+
+        start_btn = discord.ui.Button(
+            label="🗺️ ¡Explorar!",
+            style=discord.ButtonStyle.success,
+            disabled=len(state["selected"]) == 0
+        )
+        async def start_exp(si: discord.Interaction):
+            if si.user.id != state["user_id"]:
+                await si.response.send_message("❌ No es tu menú.", ephemeral=True)
+                return
+            db2 = load_db()
+            u2 = get_user(db2, si.user.id)
+            end_time = time.time() + EXPLORATION_DURATION
+            u2["exploration"] = {
+                "fig_keys": state["selected"],
+                "end_time": end_time,
+                "started": time.time()
+            }
+            save_db(db2)
+            names = [FIGURES.get(k, {}).get("name", k) for k in state["selected"]]
+            conf_embed = discord.Embed(
+                title="✅ ¡Exploración iniciada!",
+                description=f"**{', '.join(names)}** salieron a explorar.\nRegresarán en **30 minutos**.\nUsa `/exploracion` de nuevo para recoger sus recompensas.",
+                color=0x2ecc71
+            )
+            await si.response.edit_message(embed=conf_embed, view=None)
+        start_btn.callback = start_exp
+        view.add_item(start_btn)
+        return embed, view
+
+    def build_exp_view(st):
+        """Reconstruye el view con los datos actuales."""
+        v = discord.ui.View(timeout=60)
+        sel2 = discord.ui.Select(placeholder="Añadir figura...", options=options, max_values=1)
+        async def add2(si: discord.Interaction):
+            if si.user.id != st["user_id"]: return
+            k = sel2.values[0]
+            if k not in st["selected"] and len(st["selected"]) < 3:
+                st["selected"].append(k)
+            new_embed = discord.Embed(
+                title="🗺️ Preparar Exploración",
+                description=f"Seleccionadas: **{', '.join(FIGURES.get(k2,{}).get('name',k2) for k2 in st['selected'])}**",
+                color=0x2ecc71
+            )
+            await si.response.edit_message(embed=new_embed, view=build_exp_view(st))
+        sel2.callback = add2
+        v.add_item(sel2)
+        sb = discord.ui.Button(label="🗺️ ¡Explorar!", style=discord.ButtonStyle.success)
+        async def do_start(si: discord.Interaction):
+            if si.user.id != st["user_id"]: return
+            db2 = load_db()
+            u2 = get_user(db2, si.user.id)
+            u2["exploration"] = {"fig_keys": st["selected"], "end_time": time.time() + EXPLORATION_DURATION, "started": time.time()}
+            save_db(db2)
+            names = [FIGURES.get(k, {}).get("name", k) for k in st["selected"]]
+            await si.response.edit_message(embed=discord.Embed(title="✅ ¡Exploración iniciada!", description=f"**{', '.join(names)}** salieron. Regresan en 30 min.", color=0x2ecc71), view=None)
+        sb.callback = do_start
+        v.add_item(sb)
+        return v
+
+    embed, view = await show_exp_menu(interaction, is_first=True)
+    await interaction.response.send_message(embed=embed, view=view)
+
+# ============================================================
+#  SISTEMA MULTIPLAYER (/multiplayer) — hasta 4 jugadores
+# ============================================================
+active_multiplayer = {}  # channel_id -> MultiplayerSession
+
+class MultiplayerSession:
+    def __init__(self, host_id, host_name, channel_id):
+        self.channel_id = channel_id
+        self.host_id = host_id
+        self.players = {host_id: {"name": host_name, "ready": False, "team": None, "figs_data": None}}
+        self.max_players = 4
+        self.started = False
+        self.turn_order = []
+        self.current_turn_idx = 0
+        self.round_num = 1
+        self.eliminated = set()
+        self.log = []
+        self.invert_event_active = False  # evento de inversión
+
+@bot.tree.command(name="multiplayer", description="Crea una batalla multijugador (2-4 jugadores)")
+async def multiplayer_cmd(interaction: discord.Interaction):
+    channel_id = interaction.channel_id
+    if channel_id in active_multiplayer:
+        await interaction.response.send_message("❌ Ya hay una partida multijugador en este canal.", ephemeral=True)
+        return
+    if channel_id in active_battles:
+        await interaction.response.send_message("❌ Ya hay una batalla activa. Usa `/reset` primero.", ephemeral=True)
+        return
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+    if not user.get("team") or not user.get("figures"):
+        await interaction.response.send_message("❌ Equipa tus figuras con `/equipar` primero.", ephemeral=True)
+        return
+
+    session = MultiplayerSession(interaction.user.id, interaction.user.display_name, channel_id)
+    active_multiplayer[channel_id] = session
+
+    # Guardar equipo del host
+    team_indices = user.get("team", [])
+    host_team_keys = []
+    host_figs_data = []
+    for ti in team_indices:
+        if ti is not None and ti < len(user["figures"]):
+            fd = user["figures"][ti]
+            host_team_keys.append(fd["key"])
+            host_figs_data.append(fd)
+    session.players[interaction.user.id]["team"] = host_team_keys
+    session.players[interaction.user.id]["figs_data"] = host_figs_data
+    session.players[interaction.user.id]["ready"] = True
+
+    embed = discord.Embed(
+        title="⚔️ Sala Multijugador creada",
+        description=f"👑 **{interaction.user.display_name}** creó la sala.\n\n¡Únete con el botón de abajo! (máx. 4 jugadores)\nEl host puede iniciar cuando haya al menos 2.",
+        color=0x9b59b6
+    )
+    embed.add_field(name="Jugadores", value=f"1. {interaction.user.display_name} ✅", inline=False)
+
+    view = discord.ui.View(timeout=180)
+
+    join_btn = discord.ui.Button(label="🎮 Unirme", style=discord.ButtonStyle.primary)
+    start_btn = discord.ui.Button(label="⚔️ Iniciar batalla", style=discord.ButtonStyle.success)
+    cancel_btn = discord.ui.Button(label="❌ Cancelar", style=discord.ButtonStyle.danger)
+
+    async def join_callback(inter: discord.Interaction):
+        sess = active_multiplayer.get(channel_id)
+        if not sess or sess.started:
+            await inter.response.send_message("❌ La sala ya no está disponible.", ephemeral=True)
+            return
+        if inter.user.id in sess.players:
+            await inter.response.send_message("⚠️ Ya estás en la sala.", ephemeral=True)
+            return
+        if len(sess.players) >= sess.max_players:
+            await inter.response.send_message("❌ La sala está llena.", ephemeral=True)
+            return
+        db2 = load_db()
+        u2 = get_user(db2, inter.user.id)
+        if not u2:
+            await inter.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+            return
+        if not u2.get("team") or not u2.get("figures"):
+            await inter.response.send_message("❌ Equipa tus figuras con `/equipar` primero.", ephemeral=True)
+            return
+        team_idxs = u2.get("team", [])
+        p_keys, p_figs = [], []
+        for ti in team_idxs:
+            if ti is not None and ti < len(u2["figures"]):
+                fd = u2["figures"][ti]
+                p_keys.append(fd["key"])
+                p_figs.append(fd)
+        sess.players[inter.user.id] = {"name": inter.user.display_name, "ready": True, "team": p_keys, "figs_data": p_figs}
+        player_list = "\n".join(f"{i+1}. {p['name']} ✅" for i, p in enumerate(sess.players.values()))
+        new_embed = discord.Embed(title="⚔️ Sala Multijugador", description=f"¡Únete! (máx. 4)", color=0x9b59b6)
+        new_embed.add_field(name=f"Jugadores ({len(sess.players)}/4)", value=player_list, inline=False)
+        await inter.response.edit_message(embed=new_embed, view=view)
+
+    async def start_callback(inter: discord.Interaction):
+        sess = active_multiplayer.get(channel_id)
+        if not sess:
+            await inter.response.send_message("❌ Sala no encontrada.", ephemeral=True)
+            return
+        if inter.user.id != sess.host_id:
+            await inter.response.send_message("❌ Solo el host puede iniciar.", ephemeral=True)
+            return
+        if len(sess.players) < 2:
+            await inter.response.send_message("❌ Se necesitan al menos 2 jugadores.", ephemeral=True)
+            return
+        sess.started = True
+        # Construir equipos
+        sess.turn_order = list(sess.players.keys())
+        random.shuffle(sess.turn_order)
+        # Crear figuras listas para batalla
+        sess.fighters = {}
+        for uid, pdata in sess.players.items():
+            fighters = []
+            for i, fkey in enumerate(pdata["team"]):
+                fd = pdata["figs_data"][i] if i < len(pdata["figs_data"]) else {"level": 1}
+                f = make_fighter(fkey, fd)
+                f["owner_id"] = uid
+                f["owner_name"] = pdata["name"]
+                fighters.append(f)
+            sess.fighters[uid] = fighters
+
+        await inter.response.edit_message(
+            embed=discord.Embed(title="⚔️ ¡Batalla iniciada!", description=f"Orden de turnos: {' → '.join(sess.players[uid]['name'] for uid in sess.turn_order)}", color=0xe74c3c),
+            view=None
+        )
+        await run_multiplayer_battle(inter.channel, sess)
+
+    async def cancel_callback(inter: discord.Interaction):
+        sess = active_multiplayer.get(channel_id)
+        if sess and inter.user.id == sess.host_id:
+            del active_multiplayer[channel_id]
+            await inter.response.edit_message(embed=discord.Embed(title="❌ Sala cancelada", color=0xe74c3c), view=None)
+        else:
+            await inter.response.send_message("❌ Solo el host puede cancelar.", ephemeral=True)
+
+    join_btn.callback = join_callback
+    start_btn.callback = start_callback
+    cancel_btn.callback = cancel_callback
+    view.add_item(join_btn)
+    view.add_item(start_btn)
+    view.add_item(cancel_btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
+async def run_multiplayer_battle(channel, sess: MultiplayerSession):
+    """Motor de batalla multijugador. Turnos en círculos, elige a quién atacar."""
+    import asyncio
+
+    def alive_players():
+        return [uid for uid in sess.turn_order if uid not in sess.eliminated and any(f["hp"] > 0 for f in sess.fighters.get(uid, []))]
+
+    def get_active_fighter(uid):
+        for f in sess.fighters.get(uid, []):
+            if f["hp"] > 0:
+                return f
+        return None
+
+    async def send_status(msg=None):
+        lines = []
+        for uid in sess.turn_order:
+            if uid in sess.eliminated:
+                lines.append(f"💀 ~~{sess.players[uid]['name']}~~")
+                continue
+            figs = sess.fighters.get(uid, [])
+            fig_parts = []
+            for f in figs:
+                hp_str = "💀" if f["hp"] <= 0 else f"{f['hp']}HP"
+                fig_parts.append(f"{f['emoji']} {hp_str}")
+            fig_str = " | ".join(fig_parts)
+            lines.append(f"**{sess.players[uid]['name']}**: {fig_str}")
+        embed = discord.Embed(
+            title=f"⚔️ Multijugador — Ronda {sess.round_num}",
+            description="\n".join(lines),
+            color=0x9b59b6
+        )
+        if sess.invert_event_active:
+            embed.add_field(name="🔀 EVENTO GLOBAL", value="¡Los ejes están invertidos! Los ataques curan al enemigo y las curaciones dañan!", inline=False)
+        if sess.log:
+            embed.add_field(name="📋 Último turno", value="\n".join(sess.log[-5:]), inline=False)
+        if msg:
+            await msg.edit(embed=embed)
+            return msg
+        else:
+            return await channel.send(embed=embed)
+
+    status_msg = await send_status()
+
+    while len(alive_players()) > 1:
+        # Evento global aleatorio (10% por ronda)
+        if random.randint(1, 100) <= 10:
+            sess.invert_event_active = not sess.invert_event_active
+            event_msg = "🔀 **¡EVENTO GLOBAL!** ¡Los ejes se han invertido!" if sess.invert_event_active else "🔀 **¡EVENTO GLOBAL!** ¡Los ejes vuelven a la normalidad!"
+            await channel.send(event_msg)
+
+        for uid in list(sess.turn_order):
+            alives = alive_players()
+            if len(alives) <= 1:
+                break
+            if uid in sess.eliminated:
+                continue
+            if not any(f["hp"] > 0 for f in sess.fighters.get(uid, [])):
+                sess.eliminated.add(uid)
+                continue
+
+            attacker_fig = get_active_fighter(uid)
+            if not attacker_fig:
+                continue
+
+            # Construir opciones de ataque
+            enemies = [eid for eid in alives if eid != uid]
+            if not enemies:
+                break
+
+            # Pedir al jugador que elija target
+            target_options = []
+            for eid in enemies:
+                ef = get_active_fighter(eid)
+                if ef:
+                    target_options.append(discord.SelectOption(
+                        label=f"Atacar a {sess.players[eid]['name']}",
+                        value=str(eid),
+                        description=f"{ef['emoji']} {ef['name']} — {ef['hp']}HP"
+                    ))
+
+            # Construir skill options
+            skills = FIGURE_SKILLS.get(attacker_fig.get("key", ""), [])
+            skill_options = []
+            for i, sk in enumerate(skills):
+                cost = sk.get("cost", 0)
+                skill_options.append(discord.SelectOption(
+                    label=f"{sk['name']} ({cost}⚡)",
+                    value=str(i),
+                    description=sk.get("desc", "")[:50]
+                ))
+
+            turn_embed = discord.Embed(
+                title=f"🎮 Turno de {sess.players[uid]['name']}",
+                description=f"**{attacker_fig['emoji']} {attacker_fig['name']}** — {attacker_fig['hp']}HP | {attacker_fig.get('energy',0)}⚡\n\nElige objetivo y habilidad:",
+                color=0x3498db
+            )
+            turn_view = discord.ui.View(timeout=30)
+            turn_state = {"target_id": None, "skill_idx": None, "done": False}
+
+            if target_options:
+                target_sel = discord.ui.Select(placeholder="🎯 Elegir objetivo...", options=target_options)
+                async def target_cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu turno.", ephemeral=True)
+                        return
+                    turn_state["target_id"] = int(inter.user.id if inter.data["values"][0] == str(uid) else inter.data["values"][0])
+                    # Usar el valor seleccionado directamente
+                    turn_state["target_id"] = int(inter.data["values"][0])
+                    await inter.response.defer()
+                target_sel.callback = target_cb
+                turn_view.add_item(target_sel)
+
+            if skill_options:
+                skill_sel = discord.ui.Select(placeholder="✨ Elegir habilidad...", options=skill_options[:25])
+                async def skill_cb(inter: discord.Interaction):
+                    if inter.user.id != uid:
+                        await inter.response.send_message("❌ No es tu turno.", ephemeral=True)
+                        return
+                    turn_state["skill_idx"] = int(inter.data["values"][0])
+                    await inter.response.defer()
+                skill_sel.callback = skill_cb
+                turn_view.add_item(skill_sel)
+
+            confirm_btn = discord.ui.Button(label="✅ Confirmar", style=discord.ButtonStyle.success)
+            async def confirm_cb(inter: discord.Interaction):
+                if inter.user.id != uid:
+                    await inter.response.send_message("❌ No es tu turno.", ephemeral=True)
+                    return
+                if turn_state["target_id"] is None:
+                    await inter.response.send_message("❌ Elige un objetivo primero.", ephemeral=True)
+                    return
+                turn_state["done"] = True
+                await inter.response.defer()
+            confirm_btn.callback = confirm_cb
+            turn_view.add_item(confirm_btn)
+
+            # Auto-confirm timer: si no actúa en 30s, ataque automático
+            skip_btn = discord.ui.Button(label="⏩ Saltar (auto)", style=discord.ButtonStyle.secondary)
+            async def skip_cb(inter: discord.Interaction):
+                turn_state["done"] = True
+                turn_state["target_id"] = int(enemies[0]) if enemies else None
+                turn_state["skill_idx"] = 0
+                await inter.response.defer()
+            skip_btn.callback = skip_cb
+            turn_view.add_item(skip_btn)
+
+            turn_msg = await channel.send(f"<@{uid}>", embed=turn_embed, view=turn_view)
+
+            # Esperar hasta 30 segundos
+            for _ in range(30):
+                if turn_state["done"]:
+                    break
+                await asyncio.sleep(1)
+
+            # Auto-acción si no respondió
+            if not turn_state["done"] or turn_state["target_id"] is None:
+                turn_state["target_id"] = int(enemies[0]) if enemies else None
+                turn_state["skill_idx"] = 0
+
+            # Ejecutar ataque
+            target_uid = turn_state["target_id"]
+            defender_fig = get_active_fighter(target_uid)
+            sess.log = []
+
+            if defender_fig and attacker_fig:
+                skill_idx = turn_state["skill_idx"] if turn_state["skill_idx"] is not None else 0
+                skills_list = FIGURE_SKILLS.get(attacker_fig.get("key", ""), [])
+                skill = skills_list[skill_idx] if skill_idx is not None and skill_idx < len(skills_list) else None
+
+                if skill:
+                    power = skill.get("power", 50)
+                    dmg = max(1, int(attacker_fig["atk"] * (power / 100)) + random.randint(-3, 8) - (defender_fig["defense"] // 4))
+                    if sess.invert_event_active:
+                        # Invertido: el daño cura al defensor
+                        defender_fig["hp"] = min(defender_fig["max_hp"], defender_fig["hp"] + dmg)
+                        sess.log.append(f"🔀 **{sess.players[uid]['name']}** usa **{skill['name']}** en {sess.players[target_uid]['name']} → ¡**CURA {dmg}HP**! (invertido)")
+                    else:
+                        defender_fig["hp"] = max(0, defender_fig["hp"] - dmg)
+                        sess.log.append(f"⚔️ **{sess.players[uid]['name']}** usa **{skill['name']}** en {sess.players[target_uid]['name']} → **{dmg} daño**")
+                    if defender_fig["hp"] <= 0:
+                        sess.log.append(f"💀 {defender_fig['emoji']} {defender_fig['name']} cayó!")
+                else:
+                    dmg = random.randint(10, 30)
+                    defender_fig["hp"] = max(0, defender_fig["hp"] - dmg)
+                    sess.log.append(f"⚔️ **{sess.players[uid]['name']}** ataca a {sess.players[target_uid]['name']} → **{dmg} daño**")
+
+            # Verificar si el target fue eliminado
+            if not any(f["hp"] > 0 for f in sess.fighters.get(target_uid, [])):
+                sess.eliminated.add(target_uid)
+                sess.log.append(f"💀 **{sess.players[target_uid]['name']}** fue eliminado!")
+
+            try:
+                await turn_msg.delete()
+            except Exception:
+                pass
+
+            status_msg = await send_status(status_msg)
+
+        sess.round_num += 1
+
+        # Regenerar energía
+        for uid, figs in sess.fighters.items():
+            for f in figs:
+                if f["hp"] > 0:
+                    f["energy"] = min(100, f.get("energy", 0) + 20)
+
+    # Fin de batalla
+    winner_ids = alive_players()
+    if channel_id in active_multiplayer:
+        del active_multiplayer[channel_id]
+
+    if winner_ids:
+        wid = winner_ids[0]
+        wname = sess.players[wid]["name"]
+        db = load_db()
+        wu = get_user(db, wid)
+        if wu:
+            wu["wins"] = wu.get("wins", 0) + 1
+            wu["coins"] = wu.get("coins", 0) + COINS_WIN * (len(sess.players) - 1)
+            wu["xp"] = wu.get("xp", 0) + XP_PER_WIN
+            while wu["xp"] >= xp_to_level_up(wu["level"]):
+                wu["xp"] -= xp_to_level_up(wu["level"])
+                wu["level"] += 1
+        for uid in sess.eliminated:
+            lu = get_user(db, uid)
+            if lu:
+                lu["losses"] = lu.get("losses", 0) + 1
+                lu["coins"] = lu.get("coins", 0) + COINS_LOSS
+        save_db(db)
+        final_embed = discord.Embed(
+            title=f"🏆 ¡{wname} ganó el Multijugador!",
+            description=f"¡**{wname}** es el último en pie!\n+{COINS_WIN * (len(sess.players)-1)}🪙 | +{XP_PER_WIN}XP",
+            color=0xf1c40f
+        )
+    else:
+        final_embed = discord.Embed(title="🤝 Empate multijugador", description="¡Nadie sobrevivió!", color=0x95a5a6)
+    await channel.send(embed=final_embed)
+
+# ============================================================
+#  TIENDA: Jane Doe requiere quest completada
+# ============================================================
+# Parchear show_shop_page para bloquear janedoe sin quest
+_original_tienda = tienda.callback if hasattr(tienda, 'callback') else None
+
+# ============================================================
+#  HOOK: Notificar level up de figuras post-batalla
+# ============================================================
+# Se integra en el finish_battle existente — aquí añadimos el check post-guardar
+async def notify_pending_stat_ups(interaction_or_channel, user_data: dict, db):
+    """Notifica al usuario si alguna figura tiene pending_stat_up."""
+    for fd in user_data.get("figures", []):
+        if fd.get("pending_stat_up", 0) > 0:
+            fig = FIGURES.get(fd.get("key", ""), {})
+            fig_name = fig.get("name", fd.get("key", "?"))
+            fig_emoji = fig.get("emoji", "🎭")
+            lvl = fd.get("level", 1)
+            embed = discord.Embed(
+                title=f"⬆️ ¡{fig_emoji} {fig_name} subió al nivel {lvl}!",
+                description="Elige qué stat subir **+2** con `/subirstat`.",
+                color=0xf1c40f
+            )
+            try:
+                if hasattr(interaction_or_channel, "followup"):
+                    await interaction_or_channel.followup.send(embed=embed)
+                else:
+                    await interaction_or_channel.send(embed=embed)
+            except Exception:
+                pass
+            break  # Notificar solo una a la vez
+
+@bot.tree.command(name="subirstat", description="Elige qué stat subir en tus figuras con nivel pendiente")
+async def subir_stat_cmd(interaction: discord.Interaction):
+    db = load_db()
+    user = get_user(db, interaction.user.id)
+    if not user:
+        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
+        return
+
+    # Buscar figuras con pending
+    pending_figs = [(i, fd) for i, fd in enumerate(user.get("figures", [])) if fd.get("pending_stat_up", 0) > 0]
+    if not pending_figs:
+        await interaction.response.send_message("✅ No hay figuras esperando subir stat.", ephemeral=True)
+        return
+
+    idx, fd = pending_figs[0]
+    fig = FIGURES.get(fd["key"], {})
+    fig_name = fig.get("name", fd["key"])
+    fig_emoji = fig.get("emoji", "🎭")
+    lvl = fd.get("level", 1)
+
+    embed = discord.Embed(
+        title=f"⬆️ {fig_emoji} {fig_name} — Nv.{lvl}",
+        description=f"Tienes **{fd['pending_stat_up']}** punto(s) de stat pendiente.\n¿Qué stat quieres subir **+2**?",
+        color=0xf1c40f
+    )
+    view = discord.ui.View(timeout=60)
+    stats = [("hp", "❤️ HP +2"), ("attack", "⚔️ ATK +2"), ("defense", "🛡️ DEF +2"), ("speed", "⚡ VEL +2")]
+
+    for stat_key, label in stats:
+        btn = discord.ui.Button(label=label, style=discord.ButtonStyle.primary)
+        async def make_cb(sk, sl, fig_idx):
+            async def cb(inter: discord.Interaction):
+                if inter.user.id != interaction.user.id:
+                    await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
+                    return
+                db2 = load_db()
+                u2 = get_user(db2, inter.user.id)
+                target_fd = u2["figures"][fig_idx]
+                if "stat_ups" not in target_fd:
+                    target_fd["stat_ups"] = {}
+                target_fd["stat_ups"][sk] = target_fd["stat_ups"].get(sk, 0) + 2
+                target_fd["pending_stat_up"] = max(0, target_fd.get("pending_stat_up", 0) - 1)
+                save_db(db2)
+                result = discord.Embed(
+                    title=f"✅ ¡{FIGURES.get(target_fd['key'],{}).get('emoji','🎭')} {FIGURES.get(target_fd['key'],{}).get('name',target_fd['key'])} mejorado!",
+                    description=f"**{sl}** permanente aplicado. (Nv.{target_fd.get('level',1)})",
+                    color=0x2ecc71
+                )
+                await inter.response.edit_message(embed=result, view=None)
+                # Verificar si quedan más pending
+                if target_fd.get("pending_stat_up", 0) > 0:
+                    await asyncio.sleep(1)
+                    await subir_stat_cmd.callback(inter)
+            return cb
+        btn.callback = await make_cb(stat_key, label, idx)
+        view.add_item(btn)
+
+    await interaction.response.send_message(embed=embed, view=view)
+
+# ============================================================
+#  ACTUALIZAR /tienda PARA BLOQUEAR JANEDOE SIN QUEST
+# ============================================================
+# Se inserta en show_shop_page como filtro adicional
+_base_show_shop_page = show_shop_page
+
+async def show_shop_page_with_quest_filter(interaction, available, user, page, db):
+    """Wrapper que filtra janedoe si el usuario no completó la quest."""
+    filtered = {
+        k: v for k, v in available.items()
+        if k != "janedoe" or is_quest_unlocked(user, "documentos_jane")
+    }
+    await _base_show_shop_page(interaction, filtered, user, page, db)
+
+show_shop_page = show_shop_page_with_quest_filter
+
+# ============================================================
+#  HOOK EN FINISH_BATTLE PARA QUEST Y LEVEL UP DE FIGURAS
+# ============================================================
+# Parchar check_figure_levelup en el finish_battle
+_base_check_figure_levelup = check_figure_levelup
+
+
+
+# ============================================================
 #  ARRANQUE
 # ============================================================
 bot.run(TOKEN)
+
