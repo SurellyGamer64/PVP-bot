@@ -318,6 +318,8 @@ def xp_to_level_up(level):
 
 def apply_level_bonus(base_stat, level):
     """Aplica un bonus de stats según el nivel de la figura (+5% por nivel)"""
+    if base_stat < 0:
+        return base_stat  # No aplicar bonus a stats negativos (ej: defensa negativa de MichiBug)
     return int(base_stat * (1 + (level - 1) * 0.05))
 
 def get_figure_level(figure_data):
@@ -2877,11 +2879,17 @@ class ShopView(discord.ui.View):
 
     async def prev_page(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        await show_shop_page(interaction, self.available, self.user, self.page - 1, self.db)
+        db = load_db()
+        user = get_user(db, interaction.user.id) or self.user
+        available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+        await show_shop_page(interaction, available, user, self.page - 1, db)
 
     async def next_page(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        await show_shop_page(interaction, self.available, self.user, self.page + 1, self.db)
+        db = load_db()
+        user = get_user(db, interaction.user.id) or self.user
+        available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+        await show_shop_page(interaction, available, user, self.page + 1, db)
 
 # --- MIS FIGURAS ---
 @bot.tree.command(name="misfiguras", description="Ver tu colección de figuras")
@@ -3066,16 +3074,28 @@ async def show_equip_menu(interaction, user, step: int):
         fig = FIGURES.get(fig_data["key"])
         if fig:
             lvl = fig_data.get("level", 1)
-            options.append(discord.SelectOption(
+            raw_emoji = fig["emoji"]
+            # Discord SelectOption acepta emojis unicode o PartialEmoji para emojis personalizados
+            # Si el emoji tiene formato <:name:id>, parsearlo como PartialEmoji
+            if raw_emoji.startswith("<:") or raw_emoji.startswith("<a:"):
+                try:
+                    emoji_obj = discord.PartialEmoji.from_str(raw_emoji)
+                except Exception:
+                    emoji_obj = None
+            else:
+                emoji_obj = raw_emoji
+            option_kwargs = dict(
                 label=f"#{i+1} {fig['name']} (Nv.{lvl})",
                 value=str(i),
-                emoji=fig["emoji"],
                 description=f"{fig['rarity'].upper()} | ATK:{apply_level_bonus(fig['attack'],lvl)} HP:{apply_level_bonus(fig['hp'],lvl)}"
-            ))
+            )
+            if emoji_obj:
+                option_kwargs["emoji"] = emoji_obj
+            options.append(discord.SelectOption(**option_kwargs))
 
     select = discord.ui.Select(
         placeholder=f"Elige tu figura {pos_names[step]}...",
-        options=options,
+        options=options[:25],  # Discord limita a 25 opciones por Select
         custom_id=f"equip_step_{step}"
     )
 
@@ -3892,11 +3912,11 @@ async def lobster_cmd(interaction: discord.Interaction):
     embed.set_footer(text="Úsala con /equipar. Buena suerte.")
     await interaction.response.send_message(embed=embed)
 
-# --- ORO (solo matheogamer64) ---
-@bot.tree.command(name="oro", description="[MATHEO] Regala monedas a un usuario")
+# --- ORO (solo admins) ---
+@bot.tree.command(name="oro", description="[ADMIN] Regala monedas a un usuario")
 @app_commands.describe(usuario="Usuario al que regalar monedas", cantidad="Cantidad de monedas a regalar")
 async def oro(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
-    if interaction.user.id != MATHEO_ID:
+    if not is_admin(interaction):
         await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     if cantidad <= 0:
@@ -3916,9 +3936,18 @@ async def oro(interaction: discord.Interaction, usuario: discord.Member, cantida
     embed.set_footer(text=f"Otorgado por {interaction.user.display_name}")
     await interaction.response.send_message(embed=embed)
 # ============================================================
-#  ID EXCLUSIVO DE MATHEOGAMER64
+#  PERMISOS DE ADMINISTRADOR
 # ============================================================
-MATHEO_ID = 357067563842297857  # ← Cambia esto al ID real de matheogamer64
+MATHEO_ID = 357067563842297857  # ID de matheogamer64 (siempre tiene acceso)
+
+def is_admin(interaction: discord.Interaction) -> bool:
+    """Devuelve True si el usuario es admin del servidor o es matheogamer64."""
+    if interaction.user.id == MATHEO_ID:
+        return True
+    # Verificar permisos de administrador en el servidor
+    if isinstance(interaction.user, discord.Member):
+        return interaction.user.guild_permissions.administrator
+    return False
 
 # --- RESET (cualquier usuario, solo afecta su canal) ---
 @bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
@@ -3934,11 +3963,11 @@ async def reset_battle(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
 
-# --- BOMB (solo matheogamer64) ---
-@bot.tree.command(name="bomb", description="[MATHEO] Quita monedas a un usuario")
+# --- BOMB (solo admins) ---
+@bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
 @app_commands.describe(usuario="Usuario objetivo", cantidad="Monedas a quitar")
 async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantidad: int):
-    if interaction.user.id != MATHEO_ID:
+    if not is_admin(interaction):
         await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     db = load_db()
@@ -3958,11 +3987,11 @@ async def bomb(interaction: discord.Interaction, usuario: discord.Member, cantid
     embed.add_field(name="💳 Saldo restante", value=f"**{target['coins']:,}**", inline=True)
     await interaction.response.send_message(embed=embed)
 
-# --- NUKE (solo matheogamer64) ---
-@bot.tree.command(name="nuke", description="[MATHEO] Resetea a un usuario a nivel 1")
+# --- NUKE (solo admins) ---
+@bot.tree.command(name="nuke", description="[ADMIN] Resetea a un usuario a nivel 1")
 @app_commands.describe(usuario="Usuario a nukear")
 async def nuke(interaction: discord.Interaction, usuario: discord.Member):
-    if interaction.user.id != MATHEO_ID:
+    if not is_admin(interaction):
         await interaction.response.send_message("❌ No tienes permiso para usar este comando.", ephemeral=True)
         return
     db = load_db()
