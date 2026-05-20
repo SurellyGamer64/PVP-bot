@@ -5,7 +5,6 @@ import json
 import os
 import random
 import asyncio
-import time
 from datetime import datetime, timezone
 from flask import Flask
 import threading
@@ -2706,7 +2705,7 @@ async def end_battle(interaction, battle: BattleState, channel_id: int, winner_t
         changed = False
         for qid in winner3.get("active_quests", []):
             prev = winner3.get("quest_progress", {}).get(qid, 0)
-            await check_quest_drops(winner3, qid, interaction.channel)
+            await check_quest_drops(winner3, qid, interaction.channel, db_after)
             if winner3.get("quest_progress", {}).get(qid, 0) != prev:
                 changed = True
         if changed:
@@ -2809,7 +2808,14 @@ async def tienda(interaction: discord.Interaction):
         return
 
     # Excluir figuras con price=0 (exclusivas de jefes) y roblox_boss
-    available = {k: v for k, v in FIGURES.items() if v.get("price", 0) > 0 and k != "roblox_boss"}
+    # Jane solo aparece si el jugador la desbloqueó con la quest
+    available = {}
+    for k, v in FIGURES.items():
+        if v.get("price", 0) <= 0 or k == "roblox_boss":
+            continue
+        if k == "janedoe" and not user.get("jane_unlocked"):
+            continue
+        available[k] = v
 
     if not available:
         await interaction.response.send_message("🎉 ¡Ya tienes todas las figuras!", ephemeral=True)
@@ -4506,50 +4512,30 @@ def is_admin(interaction: discord.Interaction) -> bool:
         return interaction.user.guild_permissions.administrator
     return False
 
-# --- RESET (cualquier usuario puede usarlo en su canal) ---
-@bot.tree.command(name="reset", description="Reinicia la batalla o sala multijugador activa en este canal")
+# --- RESET (cualquier usuario, solo afecta su canal) ---
+@bot.tree.command(name="reset", description="Reinicia la batalla activa en este canal")
 async def reset_battle(interaction: discord.Interaction):
+    if not is_admin(interaction):
+        await interaction.response.send_message("❌ Solo los admins pueden reiniciar batallas.", ephemeral=True)
+        return
     removed = False
-    channel_id = interaction.channel_id
-    uid = interaction.user.id
-
-    if channel_id in active_battles:
-        battle = active_battles[channel_id]
-        if uid != battle.p1 and uid != battle.p2 and not is_admin(interaction):
-            await interaction.response.send_message("❌ Solo los jugadores de esta batalla o un admin pueden resetearla.", ephemeral=True)
-            return
-        del active_battles[channel_id]
+    if interaction.channel_id in active_battles:
+        del active_battles[interaction.channel_id]
         removed = True
-
-    # Usar globals() porque active_multiplayer/active_mp_battles se definen después en el archivo
-    _mp = globals().get("active_multiplayer", {})
-    if channel_id in _mp:
-        sess = _mp[channel_id]
-        if uid not in sess.players and not is_admin(interaction):
-            await interaction.response.send_message("❌ Solo los jugadores de esta sala o un admin pueden resetearla.", ephemeral=True)
-            return
-        del _mp[channel_id]
-        removed = True
-
-    _mpb = globals().get("active_mp_battles", {})
-    if channel_id in _mpb:
-        del _mpb[channel_id]
-        removed = True
-
-    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == channel_id]
+    # Limpiar también peleas PvP pendientes en este canal
+    to_remove = [k for k, v in pending_pvp.items() if v.get("channel_id") == interaction.channel_id]
     for k in to_remove:
         del pending_pvp[k]
         removed = True
-
     if removed:
         embed = discord.Embed(
-            title="🔄 ¡Canal reiniciado!",
-            description="La batalla o sala activa ha sido cancelada. ¡Podéis iniciar una nueva con `/pvpbot`, `/retar` o `/multiplayer`!",
+            title="🔄 Batalla reiniciada",
+            description="La batalla activa en este canal ha sido cancelada. ¡Podéis iniciar una nueva!",
             color=0x3498db
         )
         await interaction.response.send_message(embed=embed)
     else:
-        await interaction.response.send_message("❌ No hay ninguna batalla o sala activa en este canal.", ephemeral=True)
+        await interaction.response.send_message("❌ No hay ninguna batalla activa en este canal.", ephemeral=True)
 
 # --- BOMB (solo admins) ---
 @bot.tree.command(name="bomb", description="[ADMIN] Quita monedas a un usuario")
@@ -4973,9 +4959,69 @@ RECIPES = [
         "desc": "¡+50 HP a todas las figuras de tu equipo en la próxima batalla!",
         "turns": 1,
     },
+    # Recetas de 1 ingrediente
+    {
+        "name": "🦞🌶️ Langosta a la Brasa Rápida",
+        "ingredients": ["🦞", "🌶️"],
+        "effect": "atk_boost",
+        "value": 5,
+        "desc": "¡+5 ATK a tus figuras en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🍫 Langosta con Chocolate",
+        "ingredients": ["🦞", "🍫"],
+        "effect": "hp_boost",
+        "value": 15,
+        "desc": "¡+15 HP a tus figuras en la próxima batalla!",
+        "turns": 1,
+    },
+    {
+        "name": "🦞🌿 Langosta con Hierbas",
+        "ingredients": ["🦞", "🌿"],
+        "effect": "coins_boost",
+        "value": 1.2,
+        "desc": "¡+20% monedas en la próxima batalla!",
+        "turns": 1,
+    },
+    # Receta épica (3 ingredientes específicos)
+    {
+        "name": "🦞🌶️🍖🧄 Langosta Suprema del Chef",
+        "ingredients": ["🦞", "🌶️", "🍖", "🧄"],
+        "effect": "all_boost",
+        "value": 1,
+        "desc": "¡+20 ATK, +30 HP y +50% monedas por 2 batallas! ¡La receta definitiva!",
+        "turns": 2,
+        "atk_bonus": 20,
+        "hp_bonus": 30,
+        "coins_mult": 1.5,
+    },
 ]
 
-TOTAL_RECIPES_FOR_EVENT = 40  # Recetas globales necesarias para Langosta Madre
+# Combinaciones fallidas (ingredientes sin sinergia)
+FAILED_RECIPE_MSGS = [
+    "💀 La langosta explotó. Mala idea mezclar eso.",
+    "🤢 Eso huele horrible. Nadie en su sano juicio comería eso.",
+    "😵 El plato resultante tiene vida propia. Lo tiraste.",
+    "🔥 Se incendió la cocina. Ups.",
+    "❓ Esto no es comida. Es algo más... ¿artístico?",
+]
+
+def find_recipe(selected_ings: list) -> dict | None:
+    """Busca una receta que coincida con los ingredientes seleccionados."""
+    selected_sorted = sorted(selected_ings)
+    for recipe in RECIPES:
+        recipe_sorted = sorted(recipe["ingredients"])
+        if recipe_sorted == selected_sorted:
+            return recipe
+    # Buscar receta parcial (subset)
+    for recipe in RECIPES:
+        recipe_sorted = sorted(recipe["ingredients"])
+        if all(i in selected_sorted for i in recipe_sorted) and len(recipe_sorted) <= len(selected_sorted):
+            return recipe
+    return None
+
+TOTAL_RECIPES_FOR_EVENT = 40  # Recetas globales necesarias para Langosta Madre  # Recetas globales necesarias para Langosta Madre
 
 # Contador global de recetas cocinadas
 global_recipe_count = 0
@@ -5013,49 +5059,6 @@ async def ingredientes_cmd(interaction: discord.Interaction):
     embed.description = ing_str or "_Sin ingredientes. ¡Gana batallas o consigue una langosta!_"
     embed.set_footer(text=f"Recetas globales cocinadas: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
     await interaction.response.send_message(embed=embed)
-
-@bot.tree.command(name="recetas", description="Ver tus hojas de receta descubiertas y todas las recetas disponibles")
-async def recetas_cmd(interaction: discord.Interaction):
-    db = load_db()
-    user = get_user(db, interaction.user.id)
-    if not user:
-        await interaction.response.send_message("❌ Usa `/registrar` primero.", ephemeral=True)
-        return
-
-    known_sheets = set(user.get("recipe_sheets", []))
-    embed = discord.Embed(
-        title="📜 Libro de Recetas",
-        description="Las recetas marcadas con ✅ las conoces (por hoja de receta o ya las cocinaste).\nLas marcadas con ❓ aún no las has descubierto.\n\n**Todas las recetas requieren 🦞 Langosta + ingredientes.**",
-        color=0xe67e22
-    )
-
-    effect_emoji = {
-        "coins_boost": "💰",
-        "hp_boost": "❤️",
-        "atk_boost": "⚔️",
-        "xp_boost": "✨",
-        "level_fig": "⬆️",
-    }
-
-    for i, recipe in enumerate(RECIPES):
-        known = i in known_sheets
-        icon = "✅" if known else "❓"
-        if known:
-            ings = " + ".join(recipe["ingredients"][1:])  # sin langosta (ya sabemos que va)
-            embed.add_field(
-                name=f"{icon} {recipe['name']}",
-                value=f"Ingredientes: 🦞 + {ings}\n{effect_emoji.get(recipe['effect'],'⭐')} {recipe['desc']}",
-                inline=False
-            )
-        else:
-            embed.add_field(
-                name=f"{icon} Receta desconocida #{i+1}",
-                value="_¡Encuentra la hoja de receta explorando!_",
-                inline=False
-            )
-
-    embed.set_footer(text=f"Hojas descubiertas: {len(known_sheets)}/{len(RECIPES)} | Explora para encontrar más!")
-    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="cook", description="Cocina una receta combinando una langosta con hasta 3 ingredientes")
 async def cook_cmd(interaction: discord.Interaction):
@@ -5136,28 +5139,14 @@ async def cook_cmd(interaction: discord.Interaction):
             for ing in state["selected"]:
                 ings2[ing] -= 1
             user2["ingredients"] = ings2
-            # Buscar receta - primero en hojas de receta desbloqueadas
+            # Buscar receta
             matched = None
-            # Verificar recetas normales
             for recipe in RECIPES:
                 recipe_ings = set(recipe["ingredients"])
                 used = set(["🦞"] + state["selected"])
                 if recipe_ings == used:
                     matched = recipe
                     break
-
-            # Verificar hojas de receta descubiertas
-            known_sheets = user2.get("recipe_sheets", [])
-            if not matched:
-                for idx in known_sheets:
-                    if idx < len(RECIPES):
-                        recipe = RECIPES[idx]
-                        recipe_ings = set(recipe["ingredients"])
-                        used = set(["🦞"] + state["selected"])
-                        if recipe_ings == used:
-                            matched = recipe
-                            break
-
             global_recipe_count += 1
             if "recipe_count" not in user2:
                 user2["recipe_count"] = 0
@@ -5171,26 +5160,21 @@ async def cook_cmd(interaction: discord.Interaction):
                 if matched["effect"] == "level_fig":
                     team = user2.get("team", [])
                     if team and team[0] is not None and team[0] < len(user2.get("figures", [])):
-                        fig_to_level = user2["figures"][team[0]]
-                        if fig_to_level.get("level", 1) < FIGURE_LEVEL_MAX:
-                            fig_to_level["level"] = fig_to_level.get("level", 1) + 1
+                        user2["figures"][team[0]]["level"] = user2["figures"][team[0]].get("level", 1) + 1
                 result_desc = matched["desc"]
                 recipe_name = matched["name"]
-                embed2 = discord.Embed(
-                    title=f"✅ {recipe_name}",
-                    description=result_desc,
-                    color=0x2ecc71
-                )
             else:
-                # Receta sin sinergia: FALLIDA — no da beneficios
-                recipe_name = "💀 Receta Fallida"
-                result_desc = "Los ingredientes no tienen sinergia entre sí... Se arruinó la comida. No obtienes ningún beneficio.\n\n💡 _Tip: explora para encontrar Hojas de Receta que te enseñen combinaciones ganadoras._"
-                embed2 = discord.Embed(
-                    title=f"❌ {recipe_name}",
-                    description=result_desc,
-                    color=0xe74c3c
-                )
+                # Receta desconocida: monedas aleatorias
+                coins = random.randint(50, 200)
+                user2["coins"] = user2.get("coins", 0) + coins
+                recipe_name = "🍲 Receta Experimental"
+                result_desc = f"No es receta conocida, pero huele bien. +{coins}🪙"
             save_db(db2)
+            embed2 = discord.Embed(
+                title=f"✅ {recipe_name}",
+                description=result_desc,
+                color=0x2ecc71
+            )
             embed2.set_footer(text=f"Recetas globales: {global_recipe_count}/{TOTAL_RECIPES_FOR_EVENT}")
             await ci.response.edit_message(embed=embed2, view=None)
             # ¿Langosta Madre?
@@ -5586,7 +5570,7 @@ async def leaderboard_cmd(interaction: discord.Interaction):
 # ============================================================
 #  PERFIL DE OTROS USUARIOS
 # ============================================================
-@bot.tree.command(name="verperfil", description="Ver el perfil de otro usuario")
+@bot.tree.command(name="verPerfil", description="Ver el perfil de otro usuario")
 @app_commands.describe(usuario="El usuario cuyo perfil quieres ver")
 async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
@@ -5613,7 +5597,7 @@ async def ver_perfil(interaction: discord.Interaction, usuario: discord.Member):
     embed.add_field(name="⚔️ Equipo activo", value=team_str or "—", inline=False)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="verfiguras", description="Ver las figuras de otro usuario")
+@bot.tree.command(name="verFiguras", description="Ver las figuras de otro usuario")
 @app_commands.describe(usuario="El usuario cuyas figuras quieres ver")
 async def ver_figuras(interaction: discord.Interaction, usuario: discord.Member):
     db = load_db()
@@ -5663,7 +5647,7 @@ def is_quest_unlocked(user: dict, quest_id: str) -> bool:
 def get_quest_progress(user: dict, quest_id: str) -> int:
     return user.get("quest_progress", {}).get(quest_id, 0)
 
-async def check_quest_drops(user: dict, quest_id: str, channel):
+async def check_quest_drops(user: dict, quest_id: str, channel, db=None):
     """Llamar tras ganar una batalla para ver si cae progreso de misión."""
     quest = QUESTS.get(quest_id)
     if not quest:
@@ -5679,12 +5663,16 @@ async def check_quest_drops(user: dict, quest_id: str, channel):
         user["quest_progress"][quest_id] = user["quest_progress"].get(quest_id, 0) + 1
         prog = user["quest_progress"][quest_id]
         goal = quest["goal"]
-        await channel.send(f"📄 **¡Documento encontrado!** ({prog}/{goal}) — Misión: {quest['name']}")
+        if db: save_db(db)
+        await channel.send(f"📄 **¡Documento encontrado!** ({prog}/{goal}) — Misión: **{quest['name']}**")
         if prog >= goal:
             if "quests_completed" not in user:
                 user["quests_completed"] = {}
             user["quests_completed"][quest_id] = True
-            await channel.send(f"🎉 **¡Misión completada!** {quest['name']}\n{quest['reward_desc']}")
+            if quest_id == "documentos_jane":
+                user["jane_unlocked"] = True
+            if db: save_db(db)
+            await channel.send(f"🎉 **¡MISIÓN COMPLETADA!** {quest['name']}\n{quest['reward_desc']}\n¡Ya puedes comprar a Jane Doe en la `/tienda`!")
 
 @bot.tree.command(name="quest", description="Ver y activar misiones disponibles")
 async def quest_cmd(interaction: discord.Interaction):
@@ -5717,8 +5705,8 @@ async def quest_cmd(interaction: discord.Interaction):
         )
 
         if not completed and not active:
-            btn = discord.ui.Button(label=f"Activar: {quest['name']}", style=discord.ButtonStyle.success)
-            async def make_activate(quest_id):
+            btn = discord.ui.Button(label=f"Activar: {quest['name']}", style=discord.ButtonStyle.success, custom_id=f"quest_{qid}")
+            def make_activate(quest_id, quest_name):
                 async def activate(inter: discord.Interaction):
                     if inter.user.id != interaction.user.id:
                         await inter.response.send_message("❌ No es tu menú.", ephemeral=True)
@@ -5730,9 +5718,9 @@ async def quest_cmd(interaction: discord.Interaction):
                     if quest_id not in u2["active_quests"]:
                         u2["active_quests"].append(quest_id)
                     save_db(db2)
-                    await inter.response.send_message(f"✅ ¡Misión **{QUESTS[quest_id]['name']}** activada! Gana batallas para progresar.", ephemeral=True)
+                    await inter.response.send_message(f"✅ ¡Misión **{quest_name}** activada! Gana batallas para progresar.", ephemeral=True)
                 return activate
-            btn.callback = await make_activate(qid)
+            btn.callback = make_activate(qid, quest["name"])
             view.add_item(btn)
 
     await interaction.response.send_message(embed=embed, view=view)
@@ -5750,14 +5738,11 @@ EXPLORATION_REWARDS = [
 ]
 
 RECIPE_SHEETS = [
-    {"name": "📜 Hoja: Langosta Picante",    "recipe_idx": 0},
-    {"name": "📜 Hoja: Estofado de Langosta", "recipe_idx": 1},
-    {"name": "📜 Hoja: Langosta Gourmet",    "recipe_idx": 2},
-    {"name": "📜 Hoja: Langosta con Queso",  "recipe_idx": 3},
-    {"name": "📜 Hoja: Langosta Dulce",      "recipe_idx": 4},
-    {"name": "📜 Hoja: Langosta Tradicional","recipe_idx": 5},
-    {"name": "📜 Hoja: Langosta a la Brasa", "recipe_idx": 6},
-    {"name": "📜 Hoja: Langosta Explosiva",  "recipe_idx": 7},
+    {"name": "📜 Hoja: Langosta Picante",   "recipe_idx": 0},
+    {"name": "📜 Hoja: Estofado de Langosta","recipe_idx": 1},
+    {"name": "📜 Hoja: Langosta Gourmet",   "recipe_idx": 2},
+    {"name": "📜 Hoja: Langosta con Queso", "recipe_idx": 3},
+    {"name": "📜 Hoja: Langosta Dulce",     "recipe_idx": 4},
 ]
 
 def pick_exploration_reward(user: dict) -> dict:
